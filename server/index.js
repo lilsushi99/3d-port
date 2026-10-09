@@ -2,8 +2,9 @@ require('dotenv').config();
 const express = require('express'), path = require('path'), fs = require('fs'), cookieParser = require('cookie-parser');
 const { UPLOAD_DIR } = require('./upload');
 const compression = require('compression'), rateLimit = require('express-rate-limit');
+let listening = false;
 process.on('unhandledRejection', e => console.error('unhandledRejection', e));
-process.on('uncaughtException', e => console.error('uncaughtException', e));
+process.on('uncaughtException', e => { console.error('uncaughtException', e); if (!listening) process.exit(1); });   // fail loudly if the app cannot even start
 const app = express();
 app.set('trust proxy', 1);                       // Hostinger sits behind a proxy
 app.disable('x-powered-by');
@@ -20,4 +21,4 @@ app.get('/admin', (_q, r) => r.sendFile(path.join(__dirname, '..', 'public', 'ad
 app.use('/api', (_q, r) => r.status(404).json({ error: 'Not found' }));
 app.use((err, _q, res, _n) => { console.error(err); res.status(err.status || 500).json({ error: err.status ? err.message : 'Server error' }); });
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log('Portfolio running on :' + port));
+app.listen(port, '0.0.0.0', () => { listening = true; console.log('Portfolio running on :' + port); });
