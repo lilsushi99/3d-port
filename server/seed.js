@@ -1,15 +1,15 @@
 // Seeds the sample content from the original prototype. Safe to re-run: only fills EMPTY tables / missing settings.
 const db = require('./db');
 const S = {
- 'site.name':'Dominion','site.owner':'Dominion Abiodun','site.copyright':'Copyright 2026.','site.contact_email':'hello@example.com','site.default_theme':'system',
+ 'site.name':'Dominion','site.owner':'Dominion Abiodun','site.copyright':'Copyright 2026.','site.contact_email':'hello@example.com','site.made_by':'Made by Castiel.','site.default_theme':'system',
  'hero.bio_html':"<p>hey, i'm dominion. i build <b>business intelligence</b> tools on top of <b>ERP</b>, <b>POS</b> and <b>CRM</b> systems, turning business data into charts, stats and insights. i also work across <b>product design</b>, <b>software development</b> and <b>data analysis</b>.</p>",
- 'hero.reach_text':'You can reach me on the following channels.','hero.cta_label':'See my work','hero.cta_target':'#work','hero.mouse_target':'#/playground','hero.screen_video_media_id':'',
+ 'hero.reach_text':'You can reach me on the following channels.','hero.cta_label':'See my work','hero.cta_target':'#work','hero.mouse_target':'#/playground','hero.screen_video_media_id':'','hero.closing_lead':'I build products that','hero.closing_rest':'solve real problems across technology, data, and customer experience.',
  'work.title':'Selected Work','work.all_label':'All',
  'about.name':'Dominion Abiodun','about.role':'Product designer · Developer · Data analyst','about.image_media_id':'',
  'about.html':'<p>hey, i\'m dominion. i design and build <b>business intelligence</b> tools, the kind that sit on top of <b>ERP</b>, <b>POS</b> and <b>CRM</b> platforms. at this stage of my career, my focus is building intelligent software that helps businesses understand their own numbers.</p><p>every business piles up transactions, records and statistics. i turn that into charts, highs and lows, and insights people can act on. alongside this i do <b>product design</b> and <b>full-stack development</b>, and i teach <b>data analysis</b>. before that i was a lead customer support specialist at boardgame art, and a financial analyst at <a href="https://manstarlimited.com">manstar</a>, a uk e-commerce brand.</p><p>love,<br>dominion</p>',
  'footprint.title':'Our Global Footprint','footprint.text':'Clients and companies I have worked with around the world.','footprint.contact_label':'Contact','footprint.show_count':'0'
 };
-const buttons=[['about','About','Read About Me','#/about','cyan'],['work','Work','Selected Work','#work','mustard'],['clients','Clients',"Where I've Worked",'#globe','red']];
+const buttons=[['about','About','Read About Me','#/about','cyan'],['work','Click Me','Selected Work','#work','mustard'],['clients','Clients',"Where I've Worked",'#globe','red']];
 const socials=[['LinkedIn','linkedin','https://linkedin.com'],['X','x','https://x.com'],['WhatsApp','whatsapp','https://wa.me/2340000000'],['Email','email','mailto:hello@example.com'],['Facebook','facebook','https://facebook.com']];
 const cats=['Mobile App','Website','Web App','Data','Articles','Photography','Product Design'];
 const projects=[

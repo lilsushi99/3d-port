@@ -58,6 +58,9 @@ npm start                   # http://localhost:3000   admin: /admin
 * gzip/deflate compression, cache headers for static files, `ETag` revalidation, per-IP rate limiting (`RATE_LIMIT_MAX`), DB connection pooling, and crash guards so one bad request cannot take the process down.
 * Local load test (200 concurrent connections, 10 s, 1 CPU, same machine as the DB): ~2,900 req/s on `/api/content`, p99 ≈ 100 ms, 0 errors. Real throughput depends on your Hostinger plan; for large spikes put Cloudflare (free) in front and it will serve the static page and map file from its edge.
 
+## Migrations
+* `001_init.sql` — all tables. * `002_closing_statement_and_footer.sql` — data-only: adds the mobile/tablet closing statement (`hero.closing_lead`, `hero.closing_rest`) and the footer line (`site.made_by`) to the key/value `settings` table, and renames the centre laptop button to "Click Me" **only if it still has the default label "Work"**. It uses `INSERT IGNORE`, so it never overwrites anything you edited. Import it in phpMyAdmin (or `npm run migrate`).
+
 ## Where each piece of content lives
 | Content | Table / key | Admin page |
 |---|---|---|
@@ -70,7 +73,8 @@ npm start                   # http://localhost:3000   admin: /admin
 | Projects, gallery, metrics | `projects`, `project_media`, `project_metrics` (**only `title` is required**) | Selected Work |
 | Articles (schema ready, public UI later) | `articles` | Articles |
 | Footprint title/text/countries (count is `COUNT(*)`) | `settings` (`footprint.*`), `countries` | Global Footprint |
-| Copyright, site name, contact email, default theme | `settings` (`site.*`) | Settings |
+| Mobile/tablet closing statement (bold lead + faded continuation) | `settings` (`hero.closing_lead`, `hero.closing_rest`) | Homepage |
+| Copyright, “made by” footer line, site name, contact email, default theme | `settings` (`site.*`) | Settings |
 
 New projects / countries / links are **rows**. Only structural changes need a new file in `migrations/`.
 
