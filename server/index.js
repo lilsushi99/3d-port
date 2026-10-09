@@ -1,0 +1,23 @@
+require('dotenv').config();
+const express = require('express'), path = require('path'), fs = require('fs'), cookieParser = require('cookie-parser');
+const { UPLOAD_DIR } = require('./upload');
+const compression = require('compression'), rateLimit = require('express-rate-limit');
+process.on('unhandledRejection', e => console.error('unhandledRejection', e));
+process.on('uncaughtException', e => console.error('uncaughtException', e));
+const app = express();
+app.set('trust proxy', 1);                       // Hostinger sits behind a proxy
+app.disable('x-powered-by');
+app.use((req, res, next) => { res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN' }); next(); });
+app.use(compression());
+app.use(express.json({ limit: '2mb' }));
+app.use(cookieParser());
+app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', fallthrough: true }));
+app.use('/api', rateLimit({ windowMs: 60 * 1000, max: +process.env.RATE_LIMIT_MAX || 600, standardHeaders: true, legacyHeaders: false, skip: q => q.path.startsWith('/admin') }));
+app.use('/api', require('./routes/public'));
+app.use('/api/admin', require('./routes/admin'));
+app.use(express.static(path.join(__dirname, '..', 'public'), { extensions: ['html'], maxAge: '10m', setHeaders: (res, f) => { if (f.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache'); } }));
+app.get('/admin', (_q, r) => r.sendFile(path.join(__dirname, '..', 'public', 'admin', 'index.html')));
+app.use('/api', (_q, r) => r.status(404).json({ error: 'Not found' }));
+app.use((err, _q, res, _n) => { console.error(err); res.status(err.status || 500).json({ error: err.status ? err.message : 'Server error' }); });
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log('Portfolio running on :' + port));
