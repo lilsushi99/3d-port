@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Portfolio</title>
+<!--@HEAD-->
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
 <style>
 :root{--bg:#eeece7;--ink:#15140f;--mut:#6b6860;--sun:#e0b43a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1b1c;--ink:#f1f1f1;--mut:#9a9a9a}}
@@ -163,7 +164,11 @@ footer{padding:14px 28px calc(14px + env(safe-area-inset-bottom));justify-conten
  #closing{display:block;width:100%;text-align:center;font-weight:700;letter-spacing:-.045em;line-height:1.06;font-size:clamp(25px,6.8vw,54px);color:var(--ink)}
  #closing .cl-b{opacity:.5;font-weight:600}
 }
-</style></head><body>
+
+#nav{gap:10px}#navimg{width:46px;height:46px;border-radius:50%;object-fit:cover;margin-left:auto;display:block;border:2px solid rgba(255,255,255,.65);box-shadow:0 6px 14px rgba(0,0,0,.25);background:#d8d6d0}#navimg+#seek{margin-left:0}
+@media (max-width:760px){#navimg{width:44px;height:44px}}
+html.mlock,html.mlock body{overflow:hidden;overscroll-behavior:none}html.mlock #stage{touch-action:none}
+</style></head><body><!--@BODY-->
 <section id="track"><div id="stage">
  <canvas id="gl"></canvas>
  <header id="nav"><a id="seek" href="#work"><span></span><i>→</i></a></header>
@@ -178,15 +183,15 @@ footer{padding:14px 28px calc(14px + env(safe-area-inset-bottom));justify-conten
 <footer><span id="cp"></span><span id="mb"></span></footer>
 <div id="detail" aria-hidden="true"></div>
 <script>
-(async()=>{const CONTENT=await (await fetch('/api/content',{cache:'no-store'})).json(),st=CONTENT.settings;
+const __boot=async()=>{const CONTENT=window.__CONTENT||await (await fetch('/api/content',{cache:'no-store'})).json(),st=CONTENT.settings;
 const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const SAFE=u=>/^(https?:|mailto:|tel:|\/)/i.test(u||'')?u:'#';
 const ICONS={linkedin:'<rect x="3.5" y="9.5" width="3.6" height="10.5" rx=".7"/><circle cx="5.3" cy="5.5" r="2.1"/><path d="M10 9.5h3.4v1.5c.6-1 1.9-1.8 3.5-1.8 3 0 3.8 2 3.8 4.7V20h-3.5v-5.4c0-1.3-.3-2.3-1.6-2.3s-2.1 1-2.1 2.4V20H10z"/>',x:'<path d="M4.5 3.5h4l11 17h-4z"/><path d="M18.8 3.5 5.4 20.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',whatsapp:'<path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.2A9 9 0 1 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 7.6c-.4.3-1 .9-1 2 0 2.4 3.5 5.9 6 6.1 1.2.1 1.9-.7 2.1-1.3l-2-1.1-.9.8c-1.3-.5-2.6-1.8-3.1-3.1l.8-.9z"/>',email:'<rect x="3" y="5.5" width="18" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m4 8 8 5.6L20 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',facebook:'<path d="M13.5 21v-8h2.7l.5-3.2h-3.2V7.9c0-.9.4-1.6 1.7-1.6h1.6V3.4c-.3 0-1.3-.2-2.5-.2-2.5 0-4.1 1.5-4.1 4.2v2.4H7.5V13h2.7v8z"/>',instagram:'<rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="7" r="1.1"/>',link:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'};
 {const dt=st['site.default_theme'];if(dt==='light'||dt==='dark')document.documentElement.dataset.theme=dt}
 {const q=x=>document.querySelector(x);
- document.title=(st['site.name']||'Portfolio')+(st['about.role']?' — '+st['about.role']:'');
- q('.bscroll').innerHTML=st['hero.bio_html']||'';q('.reach').textContent=st['hero.reach_text']||'';
+  q('.bscroll').innerHTML=st['hero.bio_html']||'';q('.reach').textContent=st['hero.reach_text']||'';
  q('#seek span').textContent=st['hero.cta_label']||'';
+ if(st.nav_image){const im=new Image();im.id='navimg';im.alt=st.nav_image.alt||'';im.width=im.height=46;im.decoding='async';im.onerror=()=>im.remove();im.src=st.nav_image.url;q('#nav').insertBefore(im,q('#seek'))}
  q('.soc').innerHTML=CONTENT.socials.map(s=>`<a href="${esc(SAFE(s.url))}" aria-label="${esc(s.name)}" title="${esc(s.name)}"${/^mailto:|^tel:/.test(s.url)?'':' target="_blank" rel="noopener"'}>${s.icon?`<img src="${esc(s.icon.url)}" alt="" style="width:22px;height:22px">`:`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ICONS[s.icon_key]||ICONS.link}</svg>`}</a>`).join('');
  q('#cp').textContent=st['site.copyright']||'';q('#mb').textContent=st['site.made_by']||'';q('#closing .cl-a').textContent=st['hero.closing_lead']||'';q('#closing .cl-b').textContent=st['hero.closing_rest']||'';q('#closing').hidden=!(st['hero.closing_lead']||st['hero.closing_rest']);
  q('#work h1').textContent=st['work.title']||'';
@@ -216,9 +221,11 @@ const M={teal:mt(0x474d55,.75,.5),cream:mt(0x1e252d,.6,.6),sun:new T.MeshPhysica
 // ---------- screen: set SHOWCASE_VIDEO to your own mp4 later ----------
 const SHOWCASE_VIDEO=(st.screen_video&&st.screen_video.url)||'';
 const cv=document.createElement('canvas');cv.width=1024;cv.height=722;const c=cv.getContext('2d');
-let tex,vid;
-if(SHOWCASE_VIDEO){vid=document.createElement('video');Object.assign(vid,{src:SHOWCASE_VIDEO,muted:true,loop:true,playsInline:true,autoplay:true});vid.play().catch(()=>{});tex=new T.VideoTexture(vid)}else tex=new T.CanvasTexture(cv);
-tex.encoding=T.sRGBEncoding;
+const ctex=new T.CanvasTexture(cv);ctex.encoding=T.sRGBEncoding;let tex=ctex,vid=null;
+if(SHOWCASE_VIDEO){vid=document.createElement('video');Object.assign(vid,{muted:true,loop:true,playsInline:true,autoplay:true,preload:'auto'});vid.setAttribute('playsinline','');vid.src=SHOWCASE_VIDEO;vid.play().catch(()=>{});tex=new T.VideoTexture(vid);tex.encoding=T.sRGBEncoding;
+ // if the file is missing/corrupt the laptop falls back to the generated screen instead of going black
+ const fb=()=>{if(!vid)return;vid=null;screen.material.map=ctex;screen.material.needsUpdate=true;console.warn('Screen video unavailable; using fallback screen')};
+ vid.addEventListener('error',fb);setTimeout(()=>{if(vid&&vid.readyState<2&&vid.networkState===3)fb()},8000)}
 // generated "product unveil" screen recording: a tall landing page scrolls while a cursor clicks around
 const pg=document.createElement('canvas');pg.width=1024;pg.height=2500;
 function buildPage(){const g=pg.getContext('2d'),F='Outfit,system-ui,sans-serif';
@@ -245,7 +252,7 @@ function drawScreen(t){if(vid)return;const g=c,s=t/1000%20;let y=0;
  const cx=520+Math.sin(t/900)*280,cy=380+Math.cos(t/1300)*190,ck=(t/1000)%5;
  if(ck<.5){g.strokeStyle='rgba(255,106,44,'+(1-ck*2)+')';g.lineWidth=3;g.beginPath();g.arc(cx,cy,10+ck*60,0,7);g.stroke()}
  g.fillStyle='#fff';g.strokeStyle='#111';g.lineWidth=2;g.beginPath();g.moveTo(cx,cy);g.lineTo(cx,cy+26);g.lineTo(cx+7,cy+20);g.lineTo(cx+15,cy+32);g.lineTo(cx+20,cy+29);g.lineTo(cx+12,cy+18);g.lineTo(cx+20,cy+17);g.closePath();g.fill();g.stroke();
- tex.needsUpdate=true}
+ ctex.needsUpdate=true}
 buildPage();document.fonts.load('800 40px Outfit').then(buildPage,()=>{});
 // ---------- geometry helpers ----------
 function rr(w,h,r){const s=new T.Shape(),x=-w/2,y=-h/2;s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);return s}
@@ -306,11 +313,12 @@ world.position.set(MOB?-.2:-.6,1.5,0);
 const ridge=new T.Object3D();ridge.position.set(0,.75,0);laptop.add(ridge);
 // ---------- interaction ----------
 const pr=[0,0,0,0,0,0,0,0];let MOBW=5.4,MOBY=0,menuOpen=false,lastT=-1,tgt=-1,tx=0,ty=0,mx=0,my=0,last=0,hov=false,p=0,popT=performance.now()+1200;
-function nav(t){if(!t)return;if(t.startsWith('#/'))location.hash=t;else if(t[0]==='#'){const el=document.querySelector(t);if(el)glide(el)}else if(/^https?:/i.test(t))window.open(t,'_blank','noopener')}
+function nav(t){if(!t)return;t=String(t).trim();if(t==='#/about'||t==='#/playground')t=t.slice(1);   // legacy hash targets
+ if(t.startsWith('#/p/'))location.hash=t;else if(t[0]==='/')goTo(t);else if(t[0]==='#'){const el=document.querySelector(t);if(el)glide(el)}else if(/^https?:/i.test(t))window.open(t,'_blank','noopener')}
 let gl=null;
-function glide(el){const y0=scrollY,y1=Math.round(el.getBoundingClientRect().top+scrollY),d=Math.abs(y1-y0);if(!d)return;if(matchMedia('(prefers-reduced-motion:reduce)').matches){scrollTo(0,y1);return}
- const dur=Math.min(6000,Math.max(2500,d/.9)),t0=performance.now(),id=gl={};const EV=['wheel','touchstart','touchmove','keydown'],stop=()=>{if(performance.now()-t0<300)return;gl=null;EV.forEach(n=>removeEventListener(n,stop))};EV.forEach(n=>addEventListener(n,stop,{passive:true}));
- (function step(t){if(gl!==id)return;const u=Math.min(1,(t-t0)/dur);scrollTo(0,y0+(y1-y0)*(.5-.5*Math.cos(Math.PI*u)));if(u<1)requestAnimationFrame(step);else{gl=null;EV.forEach(n=>removeEventListener(n,stop))}})(t0)}
+function glide(el){const y0=scrollY,y1=Math.round(el.getBoundingClientRect().top+scrollY),d=Math.abs(y1-y0);if(!d)return;document.documentElement.classList.remove('mlock');if(matchMedia('(prefers-reduced-motion:reduce)').matches){scrollTo(0,y1);return}
+ const dur=Math.min(6000,Math.max(2500,d/.9)),t0=performance.now(),id=gl={};const EV=['wheel','touchstart','touchmove','keydown'],stop=()=>{if(performance.now()-t0<300)return;gl=null;EV.forEach(n=>removeEventListener(n,stop));applyLock()};EV.forEach(n=>addEventListener(n,stop,{passive:true}));
+ (function step(t){if(gl!==id)return;const u=Math.min(1,(t-t0)/dur);scrollTo(0,y0+(y1-y0)*(.5-.5*Math.cos(Math.PI*u)));if(u<1)requestAnimationFrame(step);else{gl=null;EV.forEach(n=>removeEventListener(n,stop));applyLock()}})(t0)}
 const ray=new T.Raycaster(),nd=new T.Vector2(),pop=$('#pop'),go=()=>glide($('#work'));
 function hit(e){nd.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(nd,cam);const h=p<.5&&ray.intersectObjects([mouse,...ctl],true).find(x=>{let o=x.object;while(o){if(o.visible===false)return false;o=o.parent}return true});let o=h&&h.object;while(o&&o!==mouse&&!ctl.includes(o))o=o.parent;tgt=!o?-1:o===mouse?0:ctl.indexOf(o)+1;return tgt>=0}
 let tapS=null,isMouse=true;
@@ -384,7 +392,7 @@ const bs=$('.bscroll');new ResizeObserver(()=>bs.classList.toggle('sc',bs.scroll
 const P=CONTENT.projects.map(p=>[p.slug,esc(p.title),esc(p.category),esc(p.client),esc(p.year),esc(p.summary),esc(p.overview),p.colors,esc(p.role),p.metrics.length?p.metrics.map(m=>[esc(m.value),esc(m.label)]):null,p]);
 const CATS=[st['work.all_label']||'All',...CONTENT.categories.map(c=>esc(c.name))];
 // designed project imagery (SVG compositions; swap for real project images later)
-function imgTag(m){return m.kind==='video'?`<video src="${esc(m.url)}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover"></video>`:`<img src="${esc(m.url)}" alt="${esc(m.alt)}" loading="lazy" style="width:100%;height:100%;object-fit:cover">`}
+function imgTag(m){return m.kind==='video'?`<video src="${esc(m.url)}" autoplay muted loop playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>`:`<img src="${esc(m.url)}" alt="${esc(m.alt)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">`}
 function art(p,v=0){if(v===0&&p[10]&&p[10].cover)return imgTag(p[10].cover);const [c1,c2]=p[7]||['#6b7280','#1f2937'],k=p[2]||'',id=p[0]+v,t=`translate(${v==1?-70:v==2?50:0} ${v==2?-30:0}) scale(${v==1?1.18:1})`;let b='';
  const phone=x=>`<g transform="translate(${x},300)"><rect x="-110" y="-240" width="220" height="480" rx="34" fill="#0c0c10"/><rect x="-99" y="-229" width="198" height="458" rx="26" fill="#f7f6f2"/><rect x="-99" y="-229" width="198" height="190" rx="26" fill="${c1}"/><rect x="-78" y="-8" width="156" height="50" rx="12" fill="#fff" stroke="#e5e3dc"/><rect x="-78" y="56" width="156" height="50" rx="12" fill="#fff" stroke="#e5e3dc"/><circle cx="-54" cy="17" r="11" fill="${c2}"/><circle cx="-54" cy="81" r="11" fill="${c1}"/><rect x="-78" y="150" width="156" height="42" rx="21" fill="${c2}"/></g>`;
  if(k=='Mobile App')b=phone(310)+phone(520).replace('translate(520,300)','translate(520,340)');
@@ -412,18 +420,34 @@ function detail(i){const p=P[i],n=P[(i+1)%P.length],s=p[1].length,z=x=>String(x)
  <a class="dn" href="#/p/${n[0]}"><em>Next project</em><span>${n[1]} →</span><div>${art(n)}</div></a>`}
 
 const AV='<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#e5a53a"/><circle cx="32" cy="25" r="11" fill="#2b2118"/><path d="M8 64c2-16 12-23 24-23s22 7 24 23z" fill="#2b2118"/></svg>';
-function about(){return `<div class="dbar"><a href="#/">← Back to portfolio</a><button id="abth" aria-label="Toggle light and dark mode">${isDark()?'☾':'☀'}</button></div>
+function about(){return `<div class="dbar"><a href="/">← Back to portfolio</a><button id="abth" aria-label="Toggle light and dark mode">${isDark()?'☾':'☀'}</button></div>
 <div class="abp"><div class="abtop"><div class="abav">${st.about_image?`<img src="${esc(st.about_image.url)}" alt="${esc(st.about_image.alt||st['about.name'])}">`:AV}</div><div><h1>${esc(st['about.name'])}</h1><span>${esc(st['about.role'])}</span></div></div>
 ${st['about.html']||''}${document.querySelector('.soc').outerHTML}</div>`}
-let saved=0;const D=$('#detail');
-function route(){const m=location.hash.match(/^#\/p\/(.+)$/);
- if(location.hash==='#/playground'){if(!D.classList.contains('on'))saved=scrollY;D.innerHTML='<div class="dbar"><a href="#/">← Back</a><span></span></div><h1 class="dt">Playground</h1>';D.scrollTop=0;D.classList.add('on');D.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';return}
- if(location.hash==='#/about'){if(!D.classList.contains('on'))saved=scrollY;D.innerHTML=about();D.scrollTop=0;{const tb=D.querySelector('#abth');tb.onclick=()=>{initAudio();sfx.click();setTheme();tb.textContent=isDark()?'☾':'☀'}}D.classList.add('on');D.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';return}
- if(m){const i=P.findIndex(x=>x[0]===m[1]);if(i<0)return;if(!D.classList.contains('on'))saved=scrollY;D.innerHTML=detail(i);D.scrollTop=0;D.classList.add('on');D.setAttribute('aria-hidden','false');document.body.style.overflow='hidden'}
- else if(D.classList.contains('on')){D.classList.remove('on');D.setAttribute('aria-hidden','true');document.body.style.overflow='';scrollTo(0,saved)}}
-addEventListener('hashchange',route);route();
-addEventListener('keydown',e=>{if(e.key==='Escape'&&D.classList.contains('on'))location.hash='#/'});
-// ---------- global footprint map ----------
+history.scrollRestoration='manual';
+let saved=0;const D=$('#detail'),OV=()=>D.classList.contains('on'),LP={'/about':1,'/playground':1},norm=p=>(p.replace(/\/+$/,'')||'/');
+const SITE=st['site.name']||'Portfolio',WHO=st['about.name']||st['site.owner']||SITE,TT={'/':SITE+(st['about.role']?' — '+st['about.role']:''),'/about':'About — '+WHO,'/playground':'Playground — '+SITE};
+function openOverlay(html){if(!OV())saved=scrollY;D.innerHTML=html;D.scrollTop=0;D.classList.add('on');D.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';applyLock()}
+function closeOverlay(){if(!OV())return;D.classList.remove('on');D.setAttribute('aria-hidden','true');document.body.style.overflow='';scrollTo(0,saved);applyLock()}
+function render(){
+ if(location.hash==='#/about'||location.hash==='#/playground')history.replaceState({},'',location.hash.slice(1));   // old hash links still work
+ const path=norm(location.pathname),m=location.hash.match(/^#\/p\/(.+)$/);
+ if(path==='/about'){openOverlay(about());const tb=D.querySelector('#abth');tb.onclick=()=>{initAudio();sfx.click();setTheme();tb.textContent=isDark()?'☾':'☀'};document.title=TT['/about']}
+ else if(path==='/playground'){openOverlay('<div class="dbar"><a href="/">← Back</a><span></span></div><h1 class="dt">Playground</h1>');document.title=TT['/playground']}
+ else if(m){const i=P.findIndex(x=>x[0]===m[1]);if(i<0)return;openOverlay(detail(i));document.title=TT['/']}
+ else{closeOverlay();document.title=TT['/']}}
+function goTo(path){if(norm(location.pathname)!==norm(path)||location.hash)history.pushState({},'',path);render()}
+addEventListener('popstate',render);addEventListener('hashchange',render);
+document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a[href]');if(!a||e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||a.target)return;let u;try{u=new URL(a.href,location.href)}catch{return}if(u.origin!==location.origin)return;const p=norm(u.pathname);if((p==='/'||LP[p])&&!/^#\/p\//.test(u.hash)){e.preventDefault();goTo(p)}});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&OV()){if(LP[norm(location.pathname)])goTo('/');else location.hash='#/'}});
+// Mobile scrolling switch (admin: hero.mobile_scroll). When OFF and the viewport is phone-sized, the hero is a locked,
+// viewport-filling entry screen: CSS overflow lock + touch-action:none on the stage (buttons/taps keep working).
+// Programmatic navigation (Click Me / Clients / See my work) lifts the lock, glides, and the lock returns only at the very top.
+const MSCROLL=st['hero.mobile_scroll']!=='0';
+function applyLock(){document.documentElement.classList.toggle('mlock',!MSCROLL&&innerWidth<=760&&scrollY<=1&&!gl&&!OV())}
+addEventListener('scroll',applyLock,{passive:true});addEventListener('resize',applyLock);
+render();
+// ---------- global footprint map (lazy: built only when the section is near the viewport) ----------
+let __mapInit=false;const initMap=async()=>{if(__mapInit)return;__mapInit=true;
 const MAP=await (await fetch('/map-data.json')).json(),HL=new Set(CONTENT.countries.map(c=>c.iso)),DBC=new Map(CONTENT.countries.map(c=>[c.iso,c])),svg=$('#map'),tip=$('#tip'),wrap=$('#mapwrap'),sel=$('#sel');
 svg.innerHTML='<g id="mg">'+Object.entries(MAP.p).map(([id,v],i)=>`<path data-id="${id}" style="--i:${i%60}" class="${HL.has(id)?'hl':''}" d="${v[3]}"/>`).join('')+MAP.s.map(v=>`<circle class="sm" data-id="${v[0]}" cx="${v[1]}" cy="${v[2]}" r="${v[3]}" data-r="${v[3]}"/>`).join('')+CONTENT.countries.map(c=>{const ll=(c.lat!=null&&c.lng!=null)?[c.lat,c.lng]:MAP.ll[c.iso];if(!ll)return'';const d=Math.PI/180,l=ll[1]*d,f=ll[0]*d,f2=f*f,f4=f2*f2,X=l*(.8707-.131979*f2+f4*(-.013791+f4*(.003971*f2-.001529*f4))),Y=f*(1.007226+f2*(.015085+f4*(-.044475+.028874*f2-.005916*f4)));return`<g class="pin" data-x="${(MAP.proj.t[0]+MAP.proj.s*X).toFixed(1)}" data-y="${(MAP.proj.t[1]-MAP.proj.s*Y).toFixed(1)}"><circle r="2"/><circle class="ring" r="2"/></g>`}).join('')+'</g>';
 const mg=$('#mg'),MV={k:1,x:0,y:0,sel:null},narrow=()=>innerWidth<760||innerWidth/innerHeight<1.15;
@@ -462,5 +486,12 @@ function asc(t){requestAnimationFrame(asc);if(!vis||t-lt<80)return;lt=t;const w=
  ac.clearRect(0,0,w,h);ac.font='10px monospace';ac.fillStyle='#ee5a24';const cw=9,ch=13,rows=h/ch;
  for(let y=0;y<rows;y++)for(let x=0;x<w/cw;x++){const k=y/rows,n=Math.sin(x*.21+t/900)*Math.sin(x*.07-t/1300+y*.15)*.5+.5,v=k*k*(.35+n*.9)-Math.random()*.08;if(v>.12)ac.fillText(CH[Math.min(CH.length-1,(v*CH.length)|0)],x*cw,y*ch)}}
 requestAnimationFrame(asc);
-})().catch(e=>{document.body.insertAdjacentHTML('afterbegin','<p style="padding:24px;font:16px sans-serif">Content could not be loaded. Please try again.</p>');console.error(e)});
+};
+new IntersectionObserver((es,o)=>{if(es.some(x=>x.isIntersecting)){o.disconnect();initMap()}},{rootMargin:'1200px'}).observe(document.querySelector('#globe'));
+applyLock();
+// The hero is ready once the first frame is drawn and fonts have settled: tell the preloader (it never waits on below-the-fold media).
+requestAnimationFrame(()=>requestAnimationFrame(()=>{Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,1200))]).then(()=>{layoutMobile();window.__ready&&window.__ready()})}));
+};
+const __run=()=>__boot().catch(e=>{console.error(e);window.__ready&&window.__ready(true);document.body.insertAdjacentHTML('afterbegin','<p style="padding:24px;font:16px sans-serif">The page could not be loaded. Please refresh.</p>')});
+document.readyState==='loading'?document.addEventListener('DOMContentLoaded',__run):__run();
 </script></body></html>

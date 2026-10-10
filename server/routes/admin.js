@@ -1,6 +1,7 @@
 // Protected admin API. Every route below requireAuth (httpOnly session cookie + CSRF header).
 const router = require('express').Router(), fs = require('fs'), path = require('path'), sanitizeHtml = require('sanitize-html');
-const db = require('../db'), { login, loginLimiter, requireAuth, cookieOpts } = require('../auth'), { upload, UPLOAD_DIR } = require('../upload');
+const db = require('../db'), { login, loginLimiter, requireAuth, cookieOpts } = require('../auth');
+const { upload, exists, validate, unlinkQuiet, health: storageHealth } = require('../upload');
 const wrap = fn => (q, r, n) => fn(q, r).catch(n);
 const bad = (m, s = 400) => Object.assign(new Error(m), { status: s });
 const slugify = s => String(s).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'item';
@@ -83,28 +84,59 @@ router.put('/projects/:id', wrap((q, r) => saveProject(q, r, +q.params.id)));
 router.delete('/projects/:id', wrap(async (q, r) => { await db.query('DELETE FROM projects WHERE id=?', [+q.params.id]); r.json({ ok: true }); }));
 
 // ---- settings (key/value) ----
-const KEY = /^(site|hero|work|about|footprint)\.[a-z_]+$/;
-router.get('/settings', wrap(async (_q, r) => r.json(Object.fromEntries((await db.query('SELECT `key`,`value` FROM settings'))[0].map(x => [x.key, x.value])))));
-router.put('/settings', wrap(async (q, r) => {
-  for (const [k, v] of Object.entries(q.body || {})) {
-    if (!KEY.test(k)) throw bad('Unknown setting ' + k);
-    await db.query('INSERT INTO settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)', [k, k.endsWith('_html') ? clean(v) : String(v ?? '')]);
+const KEY = /^(site|hero|work|about|footprint|preloader)\.[a-z_]+$/;
+const BOOLS = new Set(['hero.mobile_scroll', 'preloader.enabled', 'footprint.show_count']);
+const MEDIA_KEYS = new Set(['site.favicon_media_id', 'hero.nav_image_media_id', 'about.image_media_id', 'hero.screen_video_media_id']);
+async function normalize(k, v) {
+  if (k.endsWith('_html')) return clean(v);
+  if (BOOLS.has(k)) return (v === 1 || v === '1' || v === true || v === 'true' || v === 'on') ? '1' : '0';
+  if (k === 'preloader.duration') { const n = parseInt(v, 10); return String(Number.isFinite(n) ? Math.min(3500, Math.max(800, n)) : 2000); }   // 0.8s .. 3.5s
+  if (k === 'preloader.text') return String(v ?? '').replace(/<[^>]*>/g, '').trim().slice(0, 40);
+  if (MEDIA_KEYS.has(k)) {
+    const s = String(v ?? '').trim(); if (s === '') return '';
+    if (!/^\d+$/.test(s)) throw bad(`${k} must be a media id`);
+    const [[m]] = await db.query('SELECT kind FROM media WHERE id=?', [+s]); if (!m) throw bad('Selected media does not exist');
+    if (k === 'hero.screen_video_media_id' ? m.kind !== 'video' : m.kind !== 'image') throw bad(k === 'hero.screen_video_media_id' ? 'The laptop screen needs a video' : 'This field needs an image');
+    return s;
   }
+  return String(v ?? '');
+}
+router.get('/settings', wrap(async (_q, r) => r.json(Object.fromEntries((await db.query("SELECT `key`,`value` FROM settings WHERE `key` NOT LIKE 'system.%'"))[0].map(x => [x.key, x.value])))));
+router.put('/settings', wrap(async (q, r) => {
+  const rows = [];
+  for (const [k, v] of Object.entries(q.body || {})) { if (!KEY.test(k)) throw bad('Unknown setting ' + k); rows.push([k, await normalize(k, v)]); }   // validate everything before writing anything
+  for (const [k, v] of rows) await db.query('INSERT INTO settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)', [k, v]);
   r.json({ ok: true });
 }));
 
-// ---- media (files live on disk in UPLOAD_DIR; MySQL stores only the path) ----
-router.get('/media', wrap(async (_q, r) => r.json((await db.query('SELECT * FROM media ORDER BY id DESC'))[0].map(m => ({ ...m, url: '/uploads/' + m.path })))));
+// ---- media (files live on disk in UPLOAD_DIR; MySQL keeps only the file name) ----
+router.get('/storage', wrap(async (_q, r) => r.json(await storageHealth(db))));
+router.get('/media', wrap(async (_q, r) => r.json((await db.query('SELECT * FROM media ORDER BY id DESC'))[0].map(m => ({ ...m, url: '/uploads/' + m.path, missing: !exists(m.path) })))));
 router.post('/media', upload.single('file'), wrap(async (q, r) => {
   if (!q.file) throw bad('No file');
+  const err = validate(q.file); if (err) { unlinkQuiet(q.file.filename); throw bad(err.message, err.status); }
   const kind = q.file.mimetype.startsWith('video') ? 'video' : 'image';
   const [x] = await db.query('INSERT INTO media (path,original_name,mime,kind,size_bytes,alt) VALUES (?,?,?,?,?,?)', [q.file.filename, q.file.originalname, q.file.mimetype, kind, q.file.size, q.body.alt || null]);
   r.json({ id: x.insertId, path: q.file.filename, url: '/uploads/' + q.file.filename, kind, original_name: q.file.originalname });
 }));
+// Repair tool: put a file back behind an EXISTING media id, so every reference to it (settings, projects, galleries) works again.
+router.post('/media/:id/replace', upload.single('file'), wrap(async (q, r) => {
+  if (!q.file) throw bad('No file');
+  const [[m]] = await db.query('SELECT path FROM media WHERE id=?', [+q.params.id]);
+  if (!m) { unlinkQuiet(q.file.filename); throw bad('Media not found', 404); }
+  const err = validate(q.file); if (err) { unlinkQuiet(q.file.filename); throw bad(err.message, err.status); }
+  const kind = q.file.mimetype.startsWith('video') ? 'video' : 'image';
+  await db.query('UPDATE media SET path=?,original_name=?,mime=?,kind=?,size_bytes=? WHERE id=?', [q.file.filename, q.file.originalname, q.file.mimetype, kind, q.file.size, +q.params.id]);
+  unlinkQuiet(m.path);
+  r.json({ ok: true, url: '/uploads/' + q.file.filename, kind });
+}));
 router.put('/media/:id', wrap(async (q, r) => { await db.query('UPDATE media SET alt=? WHERE id=?', [q.body.alt || null, +q.params.id]); r.json({ ok: true }); }));
 router.delete('/media/:id', wrap(async (q, r) => {
-  const [[m]] = await db.query('SELECT path FROM media WHERE id=?', [+q.params.id]);
-  if (m) { await db.query('DELETE FROM media WHERE id=?', [+q.params.id]); fs.unlink(path.join(UPLOAD_DIR, path.basename(m.path)), () => {}); }
+  const id = +q.params.id, [[m]] = await db.query('SELECT path FROM media WHERE id=?', [id]);
+  if (m) {
+    for (const k of MEDIA_KEYS) await db.query('UPDATE settings SET `value`=\'\' WHERE `key`=? AND `value`=?', [k, String(id)]);   // no dangling references
+    await db.query('DELETE FROM media WHERE id=?', [id]); unlinkQuiet(m.path);
+  }
   r.json({ ok: true });
 }));
 

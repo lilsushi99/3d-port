@@ -8,7 +8,9 @@
     "start": "node server/index.js",
     "migrate": "node server/migrate.js",
     "seed": "node server/seed.js",
-    "create-admin": "node scripts/create-admin.js"
+    "create-admin": "node scripts/create-admin.js",
+    "media:check": "node scripts/media-check.js",
+    "check": "node --check server/index.js && node --check server/render.js && node --check server/upload.js && node --check server/routes/public.js && node --check server/routes/admin.js"
   },
   "engines": {
     "node": ">=18"
