@@ -1,12 +1,13 @@
 // Public, read-only content API. Database -> this API -> the website. Nothing here writes.
-const router = require('express').Router(), db = require('../db'), { exists } = require('../upload');
+const router = require('express').Router(), db = require('../db'), { exists } = require('../upload'), { webpName } = require('../optimize');
 const wrap = fn => (q, r, n) => fn(q, r).catch(n);
 const group = (rows, key) => rows.reduce((m, r) => ((m[r[key]] ||= []).push(r), m), {});
 
 async function build() {
   const [media] = await db.query('SELECT id,path,kind,alt FROM media');
   // Media whose file is gone from disk is treated as "not set", so the site falls back gracefully instead of 404-ing.
-  const mm = new Map(media.filter(m => exists(m.path)).map(m => [m.id, { id: m.id, url: '/uploads/' + m.path, kind: m.kind, alt: m.alt || '' }]));
+  const webpOf = m => { const w = m.kind === 'image' && webpName(m.path); return w && exists(w) ? '/uploads/' + w : null; };   // optional optimised derivative
+  const mm = new Map(media.filter(m => exists(m.path)).map(m => [m.id, { id: m.id, url: '/uploads/' + m.path, webp: webpOf(m), kind: m.kind, alt: m.alt || '' }]));
   const U = id => (id && mm.get(+id)) || null;
   const [sr] = await db.query('SELECT `key`,`value` FROM settings');
   const settings = Object.fromEntries(sr.filter(r => !r.key.startsWith('system.')).map(r => [r.key, r.value]));

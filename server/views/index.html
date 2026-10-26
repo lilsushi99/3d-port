@@ -39,6 +39,9 @@ a{color:inherit}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .p{position:relative;aspect-ratio:4/3.4;overflow:hidden;border-radius:6px;color:#fff}
 .p .art{position:absolute;inset:0;transition:transform .7s cubic-bezier(.2,.7,.2,1)}
+/* Uploaded media is shown IN FULL (never cropped): contain + a neutral tint behind any letterboxing. */
+.p .art,.dh,.dg>div,.dn>div{background:rgba(127,127,127,.12);background:color-mix(in srgb,var(--ink) 6%,var(--bg))}
+.mfit{width:100%;height:100%;display:block;object-fit:contain}picture{display:contents}
 .p:hover .art{transform:scale(1.05)}
 .p .t{position:absolute;left:16px;bottom:14px;font-weight:600;font-size:18px;transition:opacity .2s}
 .p .m{position:absolute;inset:auto 0 0 0;padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:13px;background:linear-gradient(transparent,rgba(0,0,0,.65));transform:translateY(100%);transition:transform .35s}
@@ -392,7 +395,7 @@ const bs=$('.bscroll');new ResizeObserver(()=>bs.classList.toggle('sc',bs.scroll
 const P=CONTENT.projects.map(p=>[p.slug,esc(p.title),esc(p.category),esc(p.client),esc(p.year),esc(p.summary),esc(p.overview),p.colors,esc(p.role),p.metrics.length?p.metrics.map(m=>[esc(m.value),esc(m.label)]):null,p]);
 const CATS=[st['work.all_label']||'All',...CONTENT.categories.map(c=>esc(c.name))];
 // designed project imagery (SVG compositions; swap for real project images later)
-function imgTag(m){return m.kind==='video'?`<video src="${esc(m.url)}" autoplay muted loop playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>`:`<img src="${esc(m.url)}" alt="${esc(m.alt)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover">`}
+function imgTag(m){return m.kind==='video'?`<video class="mfit" src="${esc(m.url)}" autoplay muted loop playsinline preload="metadata"></video>`:`<picture>${m.webp?`<source srcset="${esc(m.webp)}" type="image/webp">`:''}<img class="mfit" src="${esc(m.url)}" alt="${esc(m.alt)}" loading="lazy" decoding="async"></picture>`}
 function art(p,v=0){if(v===0&&p[10]&&p[10].cover)return imgTag(p[10].cover);const [c1,c2]=p[7]||['#6b7280','#1f2937'],k=p[2]||'',id=p[0]+v,t=`translate(${v==1?-70:v==2?50:0} ${v==2?-30:0}) scale(${v==1?1.18:1})`;let b='';
  const phone=x=>`<g transform="translate(${x},300)"><rect x="-110" y="-240" width="220" height="480" rx="34" fill="#0c0c10"/><rect x="-99" y="-229" width="198" height="458" rx="26" fill="#f7f6f2"/><rect x="-99" y="-229" width="198" height="190" rx="26" fill="${c1}"/><rect x="-78" y="-8" width="156" height="50" rx="12" fill="#fff" stroke="#e5e3dc"/><rect x="-78" y="56" width="156" height="50" rx="12" fill="#fff" stroke="#e5e3dc"/><circle cx="-54" cy="17" r="11" fill="${c2}"/><circle cx="-54" cy="81" r="11" fill="${c1}"/><rect x="-78" y="150" width="156" height="42" rx="21" fill="${c2}"/></g>`;
  if(k=='Mobile App')b=phone(310)+phone(520).replace('translate(520,300)','translate(520,340)');

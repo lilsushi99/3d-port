@@ -1,7 +1,8 @@
 // Protected admin API. Every route below requireAuth (httpOnly session cookie + CSRF header).
 const router = require('express').Router(), fs = require('fs'), path = require('path'), sanitizeHtml = require('sanitize-html');
 const db = require('../db'), { login, loginLimiter, requireAuth, cookieOpts } = require('../auth');
-const { upload, exists, validate, unlinkQuiet, health: storageHealth } = require('../upload');
+const { single: uploadOne, LIMIT, MB, UPLOAD_DIR, exists, validate, unlinkQuiet, health: storageHealth } = require('../upload');
+const optimize = require('../optimize'), { mp4Layout, FASTSTART_TIP } = require('../mp4');
 const wrap = fn => (q, r, n) => fn(q, r).catch(n);
 const bad = (m, s = 400) => Object.assign(new Error(m), { status: s });
 const slugify = s => String(s).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'item';
@@ -110,17 +111,30 @@ router.put('/settings', wrap(async (q, r) => {
 }));
 
 // ---- media (files live on disk in UPLOAD_DIR; MySQL keeps only the file name) ----
-router.get('/storage', wrap(async (_q, r) => r.json(await storageHealth(db))));
-router.get('/media', wrap(async (_q, r) => r.json((await db.query('SELECT * FROM media ORDER BY id DESC'))[0].map(m => ({ ...m, url: '/uploads/' + m.path, missing: !exists(m.path) })))));
-router.post('/media', upload.single('file'), wrap(async (q, r) => {
+router.get('/storage', wrap(async (_q, r) => r.json({ ...(await storageHealth(db)), limits: { imageMB: LIMIT.image / MB, videoMB: LIMIT.video / MB, svgMB: LIMIT.svg / MB }, optimizer: { available: optimize.available(), enabled: optimize.enabled() } })));
+const mediaInfo = m => {   // extra, read-only facts for the admin UI (no schema change)
+  const o = { url: '/uploads/' + m.path, missing: !exists(m.path), faststart: null, webp: null, webp_bytes: null };
+  if (o.missing) return o;
+  if (m.mime === 'video/mp4') o.faststart = mp4Layout(path.join(UPLOAD_DIR, m.path)).faststart;
+  const w = m.kind === 'image' && optimize.webpName(m.path);
+  if (w && exists(w)) { o.webp = '/uploads/' + w; try { o.webp_bytes = fs.statSync(path.join(UPLOAD_DIR, w)).size; } catch {} }
+  return o;
+};
+const afterUpload = (file) => {   // runs AFTER the response is sent: never blocks the upload
+  optimize.enqueue(UPLOAD_DIR, file.filename, () => require('./public').invalidate());
+};
+const uploadWarning = file => (file.mimetype === 'video/mp4' && mp4Layout(file.path).faststart === false ? FASTSTART_TIP : undefined);
+router.get('/media', wrap(async (_q, r) => r.json((await db.query('SELECT * FROM media ORDER BY id DESC'))[0].map(m => ({ ...m, ...mediaInfo(m) })))));
+router.post('/media', uploadOne, wrap(async (q, r) => {
   if (!q.file) throw bad('No file');
   const err = validate(q.file); if (err) { unlinkQuiet(q.file.filename); throw bad(err.message, err.status); }
   const kind = q.file.mimetype.startsWith('video') ? 'video' : 'image';
   const [x] = await db.query('INSERT INTO media (path,original_name,mime,kind,size_bytes,alt) VALUES (?,?,?,?,?,?)', [q.file.filename, q.file.originalname, q.file.mimetype, kind, q.file.size, q.body.alt || null]);
-  r.json({ id: x.insertId, path: q.file.filename, url: '/uploads/' + q.file.filename, kind, original_name: q.file.originalname });
+  r.json({ id: x.insertId, path: q.file.filename, url: '/uploads/' + q.file.filename, kind, original_name: q.file.originalname, warning: uploadWarning(q.file) });
+  afterUpload(q.file);
 }));
 // Repair tool: put a file back behind an EXISTING media id, so every reference to it (settings, projects, galleries) works again.
-router.post('/media/:id/replace', upload.single('file'), wrap(async (q, r) => {
+router.post('/media/:id/replace', uploadOne, wrap(async (q, r) => {
   if (!q.file) throw bad('No file');
   const [[m]] = await db.query('SELECT path FROM media WHERE id=?', [+q.params.id]);
   if (!m) { unlinkQuiet(q.file.filename); throw bad('Media not found', 404); }
@@ -128,7 +142,8 @@ router.post('/media/:id/replace', upload.single('file'), wrap(async (q, r) => {
   const kind = q.file.mimetype.startsWith('video') ? 'video' : 'image';
   await db.query('UPDATE media SET path=?,original_name=?,mime=?,kind=?,size_bytes=? WHERE id=?', [q.file.filename, q.file.originalname, q.file.mimetype, kind, q.file.size, +q.params.id]);
   unlinkQuiet(m.path);
-  r.json({ ok: true, url: '/uploads/' + q.file.filename, kind });
+  r.json({ ok: true, url: '/uploads/' + q.file.filename, kind, warning: uploadWarning(q.file) });
+  afterUpload(q.file);
 }));
 router.put('/media/:id', wrap(async (q, r) => { await db.query('UPDATE media SET alt=? WHERE id=?', [q.body.alt || null, +q.params.id]); r.json({ ok: true }); }));
 router.delete('/media/:id', wrap(async (q, r) => {

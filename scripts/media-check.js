@@ -3,7 +3,7 @@ require('dotenv').config();
 const db = require('../server/db'), { exists, UPLOAD_DIR, insideApp } = require('../server/upload'), fs = require('fs');
 (async () => {
   const [rows] = await db.query('SELECT id,path,kind,original_name FROM media ORDER BY id');
-  const known = new Set(rows.map(r => r.path)), orphans = fs.readdirSync(UPLOAD_DIR).filter(f => !f.startsWith('.') && !known.has(f));
+  const known = new Set(rows.flatMap(r => [r.path, require('../server/optimize').webpName(r.path)].filter(Boolean))), orphans = fs.readdirSync(UPLOAD_DIR).filter(f => !f.startsWith('.') && !known.has(f));
   const missing = rows.filter(r => !exists(r.path));
   console.log(`Upload dir is ${insideApp ? 'INSIDE the project (redeploys can erase it!)' : 'outside the project (persistent)'}`);
   console.log(`${rows.length} media rows, ${rows.length - missing.length} files present, ${missing.length} MISSING, ${orphans.length} files on disk with no DB row`);
