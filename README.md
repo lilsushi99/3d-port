@@ -114,3 +114,11 @@ rate-limited; admin HTML fields are sanitised server-side (allow-list); uploads 
 * Three.js loads from cdnjs. Self-host it under `public/` if you want zero third-party requests.
 * Public Articles UI and the Playground page are intentionally not designed yet (routes/data are ready).
 * `public/map-data.json` is generated geometry (world-atlas) — it is not editable content.
+
+## Uploads, SVG and optimisation
+
+- **Limits:** 100 MB per image/video, 10 MB per SVG (SVGs are read into memory to be sanitised). Files stream to disk in `UPLOAD_DIR`. Node's request timeout is 30 min (`REQUEST_TIMEOUT_MS`). PHP limits do not apply, but the host's proxy may have its own; the admin then says "hosting rejected the upload".
+- **SVG:** every uploaded SVG is sanitised (`server/svg.js`) and rewritten on disk; it is always shown with `<img>`, never rasterised. Existing SVGs: `npm run media:sanitize-svg` (dry run) / `-- --write`.
+- **WebP:** `sharp` is an optional dependency. JPEG/PNG uploads get a `<name>.webp` beside the original (kept only if ≥15% smaller; skipped over 30 MB / 50 MP). `IMAGE_OPTIMIZE=0` disables it; `npm run media:optimize` handles existing files. If `sharp` cannot install, the site works unchanged.
+- **Video:** never transcoded. Admin → Media warns when an MP4 is not fast-start; fix with `ffmpeg -i in.mp4 -c copy -movflags +faststart out.mp4`.
+- **Tests:** `npm test` (SVG sanitiser), `npm run check`.

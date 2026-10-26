@@ -37,11 +37,17 @@ app.use(express.static(PUB, { index: false, redirect: false, maxAge: '1h' }));
 app.use((_q, r) => r.status(404).type('html').send(notFoundHtml()));
 app.use((err, q, res, _n) => {
   const s = err.code === 'LIMIT_FILE_SIZE' ? 413 : err.status || err.statusCode || 500; if (s >= 500) console.error(err);
-  if (q.path.startsWith('/api')) return res.status(s).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 80 MB)' : s < 500 ? err.message : 'Server error' });
+  const interrupted = /unexpected end of form|request aborted|premature close/i.test(err.message || '');
+  if (q.path.startsWith('/api')) return res.status(interrupted ? 400 : s).json({ error: err.code === 'LIMIT_FILE_SIZE' ? `File too large (max ${storage.LIMIT.video / storage.MB} MB)` : interrupted ? 'The upload was interrupted before it finished' : s < 500 ? err.message : 'Server error' });
   res.status(s).type('html').send(s === 404 ? notFoundHtml() : errorHtml());
 });
 (async () => {
   try { await storage.initStorage(db); } catch (e) { console.error('Storage check skipped (database not reachable yet):', e.message); }
   const port = process.env.PORT || 3000;
-  app.listen(port, '0.0.0.0', () => { listening = true; console.log('Portfolio running on :' + port); });
+  const server = app.listen(port, '0.0.0.0', () => { listening = true; console.log('Portfolio running on :' + port); });
+  // Big uploads on slow connections: Node's requestTimeout defaults to 5 minutes for the WHOLE request. 100 MB at 1 Mbit/s needs ~14 min.
+  // Defaults: 30 min for a request, 65 s keep-alive; no per-socket idle timeout. Override with REQUEST_TIMEOUT_MS if your host kills slow requests sooner.
+  server.requestTimeout = +process.env.REQUEST_TIMEOUT_MS || 30 * 60 * 1000;
+  server.headersTimeout = Math.min(65000, server.requestTimeout);
+  server.keepAliveTimeout = 65000; server.timeout = 0;
 })();

@@ -8,7 +8,59 @@ async function api(m, p, b, form) {
   if (!r.ok) throw Object.assign(new Error(j.error || 'Request failed'), { status: r.status });
   return j;
 }
-function toast(t, bad) { const d = document.createElement('div'); d.className = 'msg' + (bad ? ' bad' : ''); d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 2600); }
+function toast(t, bad) { const d = document.createElement('div'); d.className = 'msg' + (bad ? ' bad' : ''); d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), Math.min(20000, Math.max(2600, t.length * 70))); }
+// ---------- uploads: validate -> XHR with progress -> clear errors ----------
+const MB = 1048576;
+let LIM = { image: 100, video: 100, svg: 10 };                  // MB; replaced by the server's real values (GET /storage) in boot()
+const EXT = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml', ico: 'image/x-icon', mp4: 'video/mp4', webm: 'video/webm' };
+const ALLOWED = new Set([...Object.values(EXT), 'image/vnd.microsoft.icon']);
+const mimeOf = f => { const t = (f.type || '').toLowerCase(); return ALLOWED.has(t) ? t : EXT[(f.name.split('.').pop() || '').toLowerCase()] || t; };
+const fmtMB = n => (n / MB).toFixed(n >= 10 * MB ? 0 : 1) + ' MB';
+function checkFile(f) {                                          // runs BEFORE any byte is sent
+  const t = mimeOf(f), svg = t === 'image/svg+xml', vid = t.startsWith('video/');
+  if (!ALLOWED.has(t)) return `“${f.name}” is not a supported type. Use JPG, PNG, GIF, WebP, SVG, ICO, MP4 or WebM.`;
+  if (!f.size) return `“${f.name}” is empty (0 bytes).`;
+  const cap = svg ? LIM.svg : vid ? LIM.video : LIM.image;
+  if (f.size > cap * MB) return `“${f.name}” is ${fmtMB(f.size)}, over the ${cap} MB limit for ${svg ? 'SVG files' : vid ? 'videos' : 'images'}. Compress it or pick a smaller file.`;
+  return null;
+}
+function xhrUpload(path, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest(), fail = (message, status = 0) => reject(Object.assign(new Error(message), { status }));
+    x.open('POST', '/api/admin' + path); x.setRequestHeader('X-Admin', '1'); x.withCredentials = true; x.timeout = 0;
+    x.upload.onprogress = e => e.lengthComputable && onProgress(e.loaded, e.total);
+    x.upload.onload = () => onProgress(file.size, file.size, true);
+    const lost = `Upload of “${file.name}” was interrupted: the connection dropped before it finished. Check your internet connection and try again.` +
+      (file.size > 20 * MB ? ' If big files always fail like this, the hosting proxy may be cutting off large or slow uploads (it can answer 413 and close the connection early).' : '');
+    x.onerror = () => fail(lost); x.onabort = () => fail(lost); x.ontimeout = () => fail(lost);
+    x.onload = () => {
+      let j = null; try { j = JSON.parse(x.responseText); } catch {}
+      if (x.status >= 200 && x.status < 300 && j) return resolve(j);
+      if (x.status === 401) return fail('Not signed in', 401);
+      if (!j) return fail(`The hosting server rejected the upload of “${file.name}” (HTTP ${x.status}${x.status === 413 ? ', Request Entity Too Large' : ''}) before it reached the app. PHP limits (upload_max_filesize, post_max_size) do not apply because this is a Node app, but Hostinger's web proxy in front of it can have its own request-size or time limit. Try a smaller file, or ask Hostinger support to raise it.`, x.status);
+      fail(j.error || `Upload failed (HTTP ${x.status})`, x.status);
+    };
+    const fd = new FormData(); fd.append('file', file.slice(0, file.size, mimeOf(file)), file.name); x.send(fd);   // slice() sets the type without copying the file into memory
+  });
+}
+async function uploadFiles(files, pathFor) {
+  files = [...files]; const done = [], ui = document.createElement('div'); ui.className = 'upl'; ui.setAttribute('role', 'status');
+  ui.innerHTML = '<b></b><div class="bar"><i></i></div><small></small>'; document.body.append(ui);
+  const [t, bar, sm] = [$('b', ui), $('i', ui), $('small', ui)];
+  try {
+    for (const [i, f] of files.entries()) {
+      const bad = checkFile(f); if (bad) { toast(bad, true); continue; }
+      t.textContent = `Uploading ${files.length > 1 ? `${i + 1}/${files.length}: ` : ''}${f.name}`; bar.style.width = '0'; sm.textContent = '0%';
+      try {
+        const j = await xhrUpload(pathFor(f), f, (l, n, fin) => { const p = Math.round(l / n * 100); bar.style.width = p + '%'; sm.textContent = fin ? 'Upload complete, checking the file…' : `${p}%  (${fmtMB(l)} of ${fmtMB(n)})`; });
+        if (j.warning) toast(j.warning, true);
+        done.push(j);
+      } catch (e) { if (e.status === 401) throw e; toast(e.message, true); }
+    }
+  } finally { ui.remove(); }
+  return done;
+}
+
 const guard = fn => async (...a) => { try { return await fn(...a); } catch (e) { if (e.status === 401) return login(); toast(e.message, true); } };
 let MEDIA = [], CATS = [], MAPN = null;
 const mget = id => MEDIA.find(m => m.id == id);
@@ -21,7 +73,8 @@ function login(msg) {
 }
 async function boot() {
   try { await api('GET', '/me'); } catch { return login(); }
-  [MEDIA, CATS] = await Promise.all([api('GET', '/media'), api('GET', '/categories')]);
+  let st; [MEDIA, CATS, st] = await Promise.all([api('GET', '/media'), api('GET', '/categories'), api('GET', '/storage').catch(() => null)]);
+  if (st && st.limits) LIM = { image: st.limits.imageMB, video: st.limits.videoMB, svg: st.limits.svgMB };
   const v = (location.hash.slice(1)) || 'dashboard';
   $('#app').innerHTML = `<div class="shell"><aside><div class="brand"><i>◐</i>Portfolio CMS</div>${NAV.map(([g, it]) => `<small>${g}</small>` + it.map(([k, l]) => `<a data-v="${k}" class="${k === v ? 'on' : ''}" href="#${k}">${l}</a>`).join('')).join('')}<div class="sp"></div><div class="side-bot"><a href="/" target="_blank">View site ↗</a><a id="th">Dark mode</a><a id="lo">Sign out</a></div></aside><main><div class="top"><h1>${TITLES[v] || ''}</h1></div><div id="v"></div></main></div>`;
   $('#th').onclick = () => { document.documentElement.dataset.t = document.documentElement.dataset.t === 'dark' ? '' : 'dark'; };
@@ -33,10 +86,16 @@ window.addEventListener('hashchange', () => { if ($('.shell')) boot(); });
 // ---------- shared form helpers ----------
 const F = (l, k, v, t = 'text', a = '') => `<label>${l}<input data-s="${k}" type="${t}" value="${esc(v)}" ${a}></label>`;
 const TA = (l, k, v) => `<label>${l}<textarea data-s="${k}">${esc(v)}</textarea></label>`;
-const RTE = (l, k, v) => `<label>${l}<div class="tb"><button type="button" class="btn sm" data-c="bold"><b>B</b></button><button type="button" class="btn sm" data-c="italic"><i>I</i></button><button type="button" class="btn sm" data-c="underline"><u>U</u></button><button type="button" class="btn sm" data-c="createLink">Link</button><button type="button" class="btn sm" data-c="removeFormat">Clear</button></div><div class="rte" contenteditable data-rte="${k}">${v || ''}</div></label>`;
-const PICK = (l, k, id, kind = 'image') => { const m = mget(id); return `<label>${l}<div class="pick" data-pick="${k}" data-kind="${kind}" data-id="${id || ''}">${m ? (m.missing ? '<span class="tag">file missing</span>' : m.kind === 'video' ? `<video src="${m.url}" muted></video>` : `<img src="${m.url}" alt="">`) : '<span class="tag">none</span>'}<button type="button" class="btn sm" data-a="choose">Choose</button><button type="button" class="btn sm" data-a="clear">Remove</button></div></label>`; };
+const RTE = (l, k, v) => `<div class="fld"><span class="lbl" id="l-${k}">${l}</span><div class="tb" role="toolbar" aria-label="Formatting"><button type="button" class="btn sm" data-c="bold"><b>B</b></button><button type="button" class="btn sm" data-c="italic"><i>I</i></button><button type="button" class="btn sm" data-c="underline"><u>U</u></button><button type="button" class="btn sm" data-c="createLink">Link</button><button type="button" class="btn sm" data-c="removeFormat">Clear</button></div><div class="rte" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="l-${k}" tabindex="0" data-rte="${k}">${v || ''}</div></div>`;
+const PICK = (l, k, id, kind = 'image') => { const m = mget(id); return `<div class="fld"><span class="lbl">${l}</span><div class="pick" data-pick="${k}" data-kind="${kind}" data-id="${id || ''}">${m ? (m.missing ? '<span class="tag">file missing</span>' : m.kind === 'video' ? `<video src="${m.url}" muted></video>` : `<img src="${m.url}" alt="">`) : '<span class="tag">none</span>'}<button type="button" class="btn sm" data-a="choose">Choose</button><button type="button" class="btn sm" data-a="clear">Remove</button></div></div>`; };
 function bindForm(root) {
-  $$('[data-c]', root).forEach(b => b.onclick = () => { const c = b.dataset.c; if (c === 'createLink') { const u = prompt('Link URL (https://…)'); if (u) document.execCommand(c, false, u); } else document.execCommand(c); });
+  // Toolbar buttons must never take focus or the selection away from the editor.
+  $$('.tb button', root).forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
+  $$('[data-c]', root).forEach(b => b.onclick = () => {
+    const c = b.dataset.c, ed = b.closest('.fld').querySelector('.rte'); ed.focus();
+    if (c === 'createLink') { const sel = getSelection(), saved = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null, u = prompt('Link URL (https://…)'); ed.focus(); if (saved) { sel.removeAllRanges(); sel.addRange(saved); } if (u) document.execCommand(c, false, u); }
+    else document.execCommand(c);
+  });
   $$('[data-pick]', root).forEach(p => p.onclick = guard(async e => {
     const a = e.target.dataset.a; if (!a) return;
     if (a === 'clear') p.dataset.id = ''; else { const m = await pickMedia(p.dataset.kind); if (!m) return; p.dataset.id = m.id; }
@@ -58,7 +117,7 @@ async function pickMedia(kind) {
       const f = e.target.closest('figure'); if (f) { m.remove(); res(mget(f.dataset.id)); }
       if (e.target.id === 'upb') $('#up', m).click();
     });
-    m.addEventListener('change', guard(async e => { if (e.target.id !== 'up') return; const fd = new FormData(); fd.append('file', e.target.files[0]); await api('POST', '/media', undefined, fd); MEDIA = await api('GET', '/media'); draw(); }));
+    m.addEventListener('change', guard(async e => { if (e.target.id !== 'up') return; const r = await uploadFiles(e.target.files, () => '/media'); e.target.value = ''; if (!r.length) return; MEDIA = await api('GET', '/media'); draw(); }));
   });
 }
 
@@ -138,8 +197,8 @@ const VIEWS = {
     [MEDIA] = await Promise.all([api('GET', '/media')]); const h = await api('GET', '/storage');
     const warn = [h.insideDeployDir && 'Uploads are saved inside the deployed project folder, so a redeploy can erase them. Set the UPLOAD_DIR environment variable to a persistent folder outside the project and redeploy.', !h.writable && 'The upload folder is not writable by the server.', h.missing && `${h.missing} file(s) are missing from disk${h.resetAt ? ' (storage was reset ' + new Date(h.resetAt).toLocaleString() + ')' : ''}. The site falls back gracefully; open each flagged item and use “Replace file” to restore it.`].filter(Boolean);
     mount(root, card('Storage health', 'Files live on the server disk; MySQL stores only their names.', `<div class="cards"><div class="card stat"><small>Files on disk</small><b>${h.filesOnDisk}</b></div><div class="card stat"><small>Media records</small><b>${h.mediaRows}</b></div><div class="card stat"><small>Missing files</small><b>${h.missing}</b></div><div class="card stat"><small>Location</small><b style="font-size:16px">${h.insideDeployDir ? 'Inside project ⚠' : 'Persistent ✓'}</b></div></div>${warn.map(w => `<p><span class="tag" style="background:#fde8e6;color:#b3261e">Attention</span> ${esc(w)}</p>`).join('') || '<p><span class="tag ok">Healthy</span></p>'}`) +
-      card('Media library', 'Click an item to edit alt text, replace the file, or delete it.', `<p><input type="file" id="mu" accept="image/*,video/mp4,video/webm" multiple></p><div class="grid">${MEDIA.map(m => `<figure data-id="${m.id}">${m.missing ? '<div style="height:110px;display:grid;place-items:center;color:#b3261e;font-size:13px">file missing</div>' : m.kind === 'video' ? `<video src="${m.url}" muted preload="metadata"></video>` : `<img src="${m.url}" alt="" loading="lazy">`}<figcaption>${esc(m.original_name)}</figcaption></figure>`).join('')}</div>`), () => {
-      $('#mu').onchange = guard(async e => { for (const f of e.target.files) { const fd = new FormData(); fd.append('file', f); await api('POST', '/media', undefined, fd); } toast('Uploaded'); boot(); });
+      card('Media library', 'Click an item to edit alt text, replace the file, or delete it.', `<p class="limit"><b>Upload limit: ${LIM.image} MB per image or video</b> (SVG: ${LIM.svg} MB, because SVGs are cleaned in memory). Accepted: JPG, PNG, GIF, WebP, SVG, ICO, MP4, WebM. This is a Node app, so PHP limits (upload_max_filesize, post_max_size) do not apply, but Hostinger's proxy in front of it may have its own limit; if it rejects a file you will see “hosting rejected the upload”.${h.optimizer && h.optimizer.enabled ? ' JPEG/PNG uploads also get a smaller WebP copy made automatically in the background (the original is kept).' : ''}</p><p><input type="file" id="mu" accept="image/*,video/mp4,video/webm" multiple></p><div class="grid">${MEDIA.map(m => `<figure data-id="${m.id}">${m.missing ? '<div style="height:110px;display:grid;place-items:center;color:#b3261e;font-size:13px">file missing</div>' : m.kind === 'video' ? `<video src="${m.url}" muted preload="metadata"></video>` : `<img src="${m.url}" alt="" loading="lazy">`}<figcaption title="${m.faststart === false ? 'MP4 is not fast-start: see the file details' : ''}">${m.faststart === false ? '⚠ ' : ''}${esc(m.original_name)}</figcaption></figure>`).join('')}</div>`), () => {
+      $('#mu').onchange = guard(async e => { const inp = e.target, r = await uploadFiles(inp.files, () => '/media'); inp.value = ''; if (r.length) toast(`Uploaded ${r.length} file${r.length > 1 ? 's' : ''}`); boot(); });
       $('.grid', root).onclick = e => { const f = e.target.closest('figure'); if (f) mediaModal(mget(f.dataset.id)); };
     });
   },
@@ -182,14 +241,14 @@ function projectForm(p, cats) {
 }
 const gItem = (id, cap) => { const x = mget(id); return x ? `<figure data-id="${id}" style="cursor:default">${x.kind === 'video' ? `<video src="${x.url}" muted></video>` : `<img src="${x.url}" alt="">`}<figcaption><input placeholder="Caption" value="${esc(cap)}"><button class="btn sm dng" data-a="rmg">Remove</button></figcaption></figure>` : ''; };
 function mediaModal(m) {
-  const mo = modal(`<div class="top"><h2>${esc(m.original_name || m.path)}</h2><button class="btn" data-a="close">Close</button></div><div class="card">${m.missing ? '<p><span class="tag" style="background:#fde8e6;color:#b3261e">File missing on disk</span> Replace it to restore every place that uses this item.</p>' : m.kind === 'video' ? `<video src="${m.url}" controls muted style="max-width:100%;max-height:260px"></video>` : `<img src="${m.url}" alt="" style="max-width:100%;max-height:260px">`}<div class="row"><label>Alt text<input id="malt" value="${esc(m.alt)}"></label></div><p><input type="file" id="mrep" accept="image/*,video/mp4,video/webm" style="display:none"><button class="btn" data-a="alt">Save alt text</button> <button class="btn" data-a="rep">Replace file</button> <button class="btn dng" data-a="del">Delete</button></p></div>`);
+  const mo = modal(`<div class="top"><h2>${esc(m.original_name || m.path)}</h2><button class="btn" data-a="close">Close</button></div><div class="card">${m.missing ? '<p><span class="tag" style="background:#fde8e6;color:#b3261e">File missing on disk</span> Replace it to restore every place that uses this item.</p>' : m.kind === 'video' ? `<video src="${m.url}" controls muted style="max-width:100%;max-height:260px"></video>` : `<img src="${m.url}" alt="" style="max-width:100%;max-height:260px">`}${m.faststart === false ? '<p><span class="tag" style="background:#fff3d6;color:#8a5a00">Not fast-start</span> This MP4 stores its index (moov) after the video data (mdat), so browsers must download most of the file before it plays or seeks. It still works, but slowly for big files. Fix without re-encoding or quality loss: <code>ffmpeg -i input.mp4 -c copy -movflags +faststart output.mp4</code>, then use “Replace file”.</p>' : ''}${m.webp ? `<p><span class="tag ok">WebP copy</span> Visitors’ browsers get a ${fmtMB(m.webp_bytes || 0)} WebP instead of the ${fmtMB(m.size_bytes || 0)} original; the original is kept.</p>` : ''}<div class="row"><label>Alt text<input id="malt" value="${esc(m.alt)}"></label></div><p><input type="file" id="mrep" accept="image/*,video/mp4,video/webm" style="display:none"><button class="btn" data-a="alt">Save alt text</button> <button class="btn" data-a="rep">Replace file</button> <button class="btn dng" data-a="del">Delete</button></p></div>`);
   mo.addEventListener('click', guard(async e => {
     const a = e.target.dataset.a;
     if (a === 'alt') { await api('PUT', '/media/' + m.id, { alt: $('#malt', mo).value }); toast('Saved'); }
     if (a === 'rep') $('#mrep', mo).click();
     if (a === 'del' && confirm('Delete this file permanently? Places that use it will show nothing.')) { await api('DELETE', '/media/' + m.id); mo.remove(); boot(); }
   }));
-  mo.addEventListener('change', guard(async e => { if (e.target.id !== 'mrep') return; const fd = new FormData(); fd.append('file', e.target.files[0]); await api('POST', `/media/${m.id}/replace`, undefined, fd); toast('File replaced'); mo.remove(); boot(); }));
+  mo.addEventListener('change', guard(async e => { if (e.target.id !== 'mrep') return; const r = await uploadFiles(e.target.files, () => `/media/${m.id}/replace`); e.target.value = ''; if (!r.length) return; toast('File replaced'); mo.remove(); boot(); }));
 }
 function articleForm(a) {
   const m = modal(`<div class="top"><h2>${a.id ? 'Edit' : 'New'} article</h2><button class="btn" data-a="close">Close</button></div><div class="card"><div class="row"><label>Title (required)<input data-s="title" value="${esc(a.title)}"></label></div><div class="row c3">${F('Slug', 'slug', a.slug)}${F('Author', 'author', a.author)}<label>Status<select data-s="status">${['draft', 'published'].map(o => `<option ${a.status === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label></div><div class="row">${F('Excerpt', 'excerpt', a.excerpt)}${TA('Content', 'content', a.content)}${catSel(CATS, a.category_id)}${PICK('Cover image', 'cover_media_id', a.cover_media_id)}</div><button class="btn pri" data-a="save">Save article</button></div>`);

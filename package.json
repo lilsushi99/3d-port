@@ -10,7 +10,10 @@
     "seed": "node server/seed.js",
     "create-admin": "node scripts/create-admin.js",
     "media:check": "node scripts/media-check.js",
-    "check": "node --check server/index.js && node --check server/render.js && node --check server/upload.js && node --check server/routes/public.js && node --check server/routes/admin.js"
+    "check": "node --check server/index.js && node --check server/render.js && node --check server/upload.js && node --check server/routes/public.js && node --check server/routes/admin.js && node --check server/svg.js && node --check server/optimize.js && node --check server/mp4.js && node --check scripts/media-optimize.js && node --check public/plug/admin.js && node --check scripts/media-sanitize-svg.js",
+    "test": "node --test test/*.test.js",
+    "media:optimize": "node scripts/media-optimize.js",
+    "media:sanitize-svg": "node scripts/media-sanitize-svg.js"
   },
   "engines": {
     "node": ">=18"
@@ -29,5 +32,8 @@
   },
   "overrides": {
     "htmlparser2": "8.0.0"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.35.5"
   }
 }

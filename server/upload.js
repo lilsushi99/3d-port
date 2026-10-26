@@ -2,22 +2,31 @@
 // UPLOAD_DIR MUST be a directory that survives deployments (see README "Persistent media").
 require('dotenv').config();
 const multer = require('multer'), path = require('path'), fs = require('fs'), crypto = require('crypto');
+const { sanitizeSvg } = require('./svg'), { webpName } = require('./optimize');
 const APP_DIR = path.resolve(__dirname, '..'), LEGACY_DIR = path.join(APP_DIR, 'uploads');
 const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || LEGACY_DIR);
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 const rel = path.relative(APP_DIR, UPLOAD_DIR);
 const insideApp = !rel.startsWith('..') && !path.isAbsolute(rel);      // true => a redeploy can erase every upload
 const OK = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif', 'image/svg+xml': '.svg', 'image/x-icon': '.ico', 'image/vnd.microsoft.icon': '.ico', 'video/mp4': '.mp4', 'video/webm': '.webm' };
-const LIMIT = { image: 12 * 1024 * 1024, video: 80 * 1024 * 1024 };
+const MB = 1024 * 1024;
+// 100 MB per image/video. SVG is capped lower because the whole file is read into memory to be sanitised. Uploads themselves stream to disk (multer.diskStorage).
+const LIMIT = { image: 100 * MB, video: 100 * MB, svg: 10 * MB };
 const kindOf = m => (m.startsWith('video/') ? 'video' : 'image');
 const exists = name => !!name && fs.existsSync(path.join(UPLOAD_DIR, path.basename(name)));
 const state = { status: 'unknown', adopted: 0 };
 
 const upload = multer({
-  storage: multer.diskStorage({ destination: UPLOAD_DIR, filename: (_q, f, cb) => cb(null, crypto.randomBytes(12).toString('hex') + OK[f.mimetype]) }),
+  storage: multer.diskStorage({ destination: UPLOAD_DIR, filename: (q, f, cb) => { const n = crypto.randomBytes(12).toString('hex') + OK[f.mimetype]; q._partial = n; cb(null, n); } }),
   fileFilter: (_q, f, cb) => OK[f.mimetype] ? cb(null, true) : cb(Object.assign(new Error('Unsupported file type'), { status: 400 })),
-  limits: { fileSize: LIMIT.video }
+  limits: { fileSize: Math.max(LIMIT.image, LIMIT.video) }
 });
+
+// Use this instead of upload.single('file'): if the client disconnects mid-upload, multer leaves the half-written file behind. Remove it.
+const single = (req, res, next) => {
+  req.on('close', () => { if (!req.complete && req._partial) setTimeout(() => unlinkQuiet(req._partial), 300); });
+  upload.single('file')(req, res, next);
+};
 
 // Never trust the client-declared type: check the real bytes, per-kind size, and reject scripted SVGs.
 function sniff(file) {
@@ -30,16 +39,22 @@ function sniff(file) {
   if (m === 'image/x-icon' || m === 'image/vnd.microsoft.icon') return h.startsWith('00000100') || h.startsWith('89504e47');
   if (m === 'video/mp4') return b.toString('latin1', 4, 8) === 'ftyp';
   if (m === 'video/webm') return h.startsWith('1a45dfa3');
-  if (m === 'image/svg+xml') { const t = fs.readFileSync(file.path, 'utf8').slice(0, 200000); return /^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!DOCTYPE[^>]*>\s*)?<svg[\s>]/i.test(t) && !/<script|javascript:|\son\w+\s*=|<foreignObject|<iframe/i.test(t); }
   return false;
 }
 function validate(file) {
-  const k = kindOf(file.mimetype);
-  if (file.size > LIMIT[k]) return { status: 413, message: `${k} too large (max ${LIMIT[k] / 1048576} MB)` };
+  const svg = file.mimetype === 'image/svg+xml', k = kindOf(file.mimetype), cap = svg ? LIMIT.svg : LIMIT[k];
+  if (file.size > cap) return { status: 413, message: `${svg ? 'SVG' : k} too large (max ${cap / MB} MB)` };
+  if (svg) {   // sanitise, then REWRITE the file on disk with the cleaned markup (never rasterised; rendered with <img>)
+    try {
+      const clean = sanitizeSvg(fs.readFileSync(file.path)); fs.writeFileSync(file.path + '.tmp', clean); fs.renameSync(file.path + '.tmp', file.path);
+      file.size = Buffer.byteLength(clean); return null;
+    } catch (e) { try { fs.unlinkSync(file.path + '.tmp'); } catch {} return { status: 400, message: 'This SVG was rejected: ' + (e.status ? e.message : 'it could not be parsed') }; }
+  }
   if (!sniff(file)) return { status: 400, message: 'File content does not match its type' };
   return null;
 }
-const unlinkQuiet = name => { try { if (name) fs.unlinkSync(path.join(UPLOAD_DIR, path.basename(name))); } catch {} };
+// Removing a file also removes its optional WebP derivative (<name>.webp beside it).
+const unlinkQuiet = name => { for (const n of [name, webpName(name)]) { try { if (n) fs.unlinkSync(path.join(UPLOAD_DIR, path.basename(n))); } catch {} } };
 
 // If UPLOAD_DIR was moved out of the project, copy (never move/overwrite) any legacy ./uploads files across.
 function adoptLegacy() {
@@ -80,4 +95,4 @@ async function health(db) {
   return { writable, insideDeployDir: insideApp, status: state.status, resetAt: (rs && rs.value) || null, adoptedLegacyFiles: state.adopted,
     filesOnDisk: fs.readdirSync(UPLOAD_DIR).filter(f => !f.startsWith('.')).length, mediaRows: rows.length, missing: rows.filter(r => !exists(r.path)).length };
 }
-module.exports = { upload, UPLOAD_DIR, insideApp, kindOf, exists, validate, unlinkQuiet, initStorage, health };
+module.exports = { upload, single, LIMIT, MB, UPLOAD_DIR, insideApp, kindOf, exists, validate, unlinkQuiet, initStorage, health };
