@@ -40,9 +40,9 @@ a{color:inherit}
 .p{position:relative;aspect-ratio:4/3.4;overflow:hidden;border-radius:6px;color:#fff}
 .p .art{position:absolute;inset:0;transition:transform .7s cubic-bezier(.2,.7,.2,1)}
 /* Uploaded media is shown IN FULL (never cropped): contain + a neutral tint behind any letterboxing. */
-.p .art,.dh,.dg>div,.dn>div{background:rgba(127,127,127,.12);background:color-mix(in srgb,var(--ink) 6%,var(--bg))}
+.p .art,.dh,.dn>div{background:rgba(127,127,127,.12);background:color-mix(in srgb,var(--ink) 6%,var(--bg))}
 .mfit{width:100%;height:100%;display:block;object-fit:contain}picture{display:contents}
-.p:hover .art{transform:scale(1.05)}
+@media (hover:hover) and (pointer:fine){.p:hover .art{transform:scale(1.05)}}
 .p .t{position:absolute;left:16px;bottom:14px;font-weight:600;font-size:18px;transition:opacity .2s}
 .p .m{position:absolute;inset:auto 0 0 0;padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:13px;background:linear-gradient(transparent,rgba(0,0,0,.65));transform:translateY(100%);transition:transform .35s}
 .p:hover .m,.p:focus-within .m{transform:none}.p:hover .t{opacity:0}
@@ -80,9 +80,12 @@ em{font-style:normal}.dm em,.ds>em{display:block;color:var(--mut);font-size:12px
 .dh{aspect-ratio:16/8;margin:0 28px;border-radius:6px;overflow:hidden}
 .ds{display:grid;grid-template-columns:1fr 2fr;gap:28px;padding:10vh 28px 6vh;font-size:17px;line-height:1.6;color:var(--mut)}.ds .lead{font-size:clamp(22px,3vw,38px);line-height:1.25;color:var(--ink);margin-bottom:24px}
 .dst{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:0 28px 8vh;color:var(--mut)}.dst b{display:block;font-size:clamp(40px,7vw,96px);letter-spacing:-.04em;color:var(--ink);line-height:1}
-.dg{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;padding:0 28px 10vh}.dg>div{aspect-ratio:4/3.4;border-radius:6px;overflow:hidden}
+.dg{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start;padding:0 28px 10vh}.dg>div{min-width:0;line-height:0;border-radius:6px;overflow:hidden}
+/* Gallery media is never boxed: raster images keep their real size (width/height attributes come from the file) and shrink only when the column is narrower;
+   SVG uses its declared size like any image (always crisp, it is vector); video fills it at its real aspect ratio (set from the file's metadata). */
+.gi,.gv{display:block;max-width:100%;height:auto}.gv{width:100%;aspect-ratio:16/9}
 .dn{display:block;text-decoration:none;margin:0 28px 6vh;border-top:1px solid var(--mut);padding-top:20px;position:relative}.dn em{display:block;color:var(--mut);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
-.dn span{font-size:clamp(34px,7vw,100px);font-weight:800;letter-spacing:-.04em;line-height:1;display:block;margin-bottom:20px}.dn>div{aspect-ratio:16/6;border-radius:6px;overflow:hidden;transition:transform .5s}.dn:hover>div{transform:scale(.985)}
+.dn span{font-size:clamp(34px,7vw,100px);font-weight:800;letter-spacing:-.04em;line-height:1;display:block;margin-bottom:20px}.dn>div{aspect-ratio:16/6;border-radius:6px;overflow:hidden;transition:transform .5s}@media (hover:hover) and (pointer:fine){.dn:hover>div{transform:scale(.985)}}
 footer a{text-decoration:none}footer a:hover{text-decoration:underline}
 @media(max-width:760px){.dm{grid-template-columns:1fr 1fr}.ds,.dg{grid-template-columns:1fr}.gh{flex-direction:column}.dh{aspect-ratio:4/3}}
 
@@ -145,6 +148,8 @@ footer a{text-decoration:none}footer a:hover{text-decoration:underline}
 #globe{min-height:0;padding-bottom:calc(42vw + 60px)}#asc{height:calc(42vw + 30px);min-height:240px}
 .abp{max-width:720px;margin:0 auto;padding:4vh 28px 14vh}.abtop{display:flex;gap:20px;align-items:center;margin-bottom:6vh}
 .abav{width:112px;height:112px;border-radius:30px;overflow:hidden;flex:none}.abav svg,.abav img{width:100%;height:100%;object-fit:cover;display:block}
+.abav.rot{position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent}.abav.rot img{position:absolute;inset:0;opacity:0;transition:opacity .9s ease}.abav.rot img.on{opacity:1;z-index:2}.abav.rot img.prev{opacity:1;z-index:1;transition:none}   /* outgoing stays fully opaque under the fading-in picture: no dip, no flicker */.abav.rot:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.abav.rot img{transition:none}}
 .abtop h1{font-size:clamp(26px,4vw,40px);font-weight:700;letter-spacing:-.02em;line-height:1.1}.abtop span{color:var(--mut);font-size:15px}
 .abp p{font-size:clamp(17px,1.5vw,20px);line-height:1.7;margin-bottom:22px}.abp p b{font-weight:700}.abp p a{text-decoration:underline;text-underline-offset:3px}.abp .sign{margin:34px 0 30px;color:var(--mut)}
 #abth{width:42px;height:42px;border-radius:14px;border:1px solid rgba(128,128,128,.35);background:transparent;color:var(--ink);font-size:18px;cursor:pointer}
@@ -395,6 +400,8 @@ const bs=$('.bscroll');new ResizeObserver(()=>bs.classList.toggle('sc',bs.scroll
 const P=CONTENT.projects.map(p=>[p.slug,esc(p.title),esc(p.category),esc(p.client),esc(p.year),esc(p.summary),esc(p.overview),p.colors,esc(p.role),p.metrics.length?p.metrics.map(m=>[esc(m.value),esc(m.label)]):null,p]);
 const CATS=[st['work.all_label']||'All',...CONTENT.categories.map(c=>esc(c.name))];
 // designed project imagery (SVG compositions; swap for real project images later)
+function galTag(m){if(m.kind==='video')return `<video class="gv" src="${esc(m.url)}" autoplay muted loop playsinline preload="metadata"></video>`;
+ return `<picture>${m.webp?`<source srcset="${esc(m.webp)}" type="image/webp">`:''}<img class="gi" src="${esc(m.url)}" alt="${esc(m.alt)}" loading="lazy" decoding="async"${m.w&&m.h?` width="${m.w}" height="${m.h}"`:''}></picture>`}
 function imgTag(m){return m.kind==='video'?`<video class="mfit" src="${esc(m.url)}" autoplay muted loop playsinline preload="metadata"></video>`:`<picture>${m.webp?`<source srcset="${esc(m.webp)}" type="image/webp">`:''}<img class="mfit" src="${esc(m.url)}" alt="${esc(m.alt)}" loading="lazy" decoding="async"></picture>`}
 function art(p,v=0){if(v===0&&p[10]&&p[10].cover)return imgTag(p[10].cover);const [c1,c2]=p[7]||['#6b7280','#1f2937'],k=p[2]||'',id=p[0]+v,t=`translate(${v==1?-70:v==2?50:0} ${v==2?-30:0}) scale(${v==1?1.18:1})`;let b='';
  const phone=x=>`<g transform="translate(${x},300)"><rect x="-110" y="-240" width="220" height="480" rx="34" fill="#0c0c10"/><rect x="-99" y="-229" width="198" height="458" rx="26" fill="#f7f6f2"/><rect x="-99" y="-229" width="198" height="190" rx="26" fill="${c1}"/><rect x="-78" y="-8" width="156" height="50" rx="12" fill="#fff" stroke="#e5e3dc"/><rect x="-78" y="56" width="156" height="50" rx="12" fill="#fff" stroke="#e5e3dc"/><circle cx="-54" cy="17" r="11" fill="${c2}"/><circle cx="-54" cy="81" r="11" fill="${c1}"/><rect x="-78" y="150" width="156" height="42" rx="21" fill="${c2}"/></g>`;
@@ -419,22 +426,35 @@ function detail(i){const p=P[i],n=P[(i+1)%P.length],s=p[1].length,z=x=>String(x)
  <div class="dh">${p[10].video?imgTag(p[10].video):art(p)}</div>
  ${p[5]||p[6]?`<div class="ds"><em>Overview</em><div>${p[6]?`<p class="lead">${p[6]}</p>`:''}${p[5]?`<p>${p[5]}</p>`:''}</div></div>`:''}
  ${p[9]?`<div class="dst">${p[9].map(a=>`<div><b>${a[0]}</b>${a[1]}</div>`).join('')}</div>`:''}
- ${p[10].content?`<div class="ds"><em>Details</em><div>${p[10].content}</div></div>`:''}${p[10].gallery.length?`<div class="dg">${p[10].gallery.map(g=>`<div>${imgTag(g)}</div>`).join('')}</div>`:''}
+ ${p[10].content?`<div class="ds"><em>Details</em><div>${p[10].content}</div></div>`:''}${p[10].gallery.length?`<div class="dg">${p[10].gallery.map(g=>`<div>${galTag(g)}</div>`).join('')}</div>`:''}
  <a class="dn" href="#/p/${n[0]}"><em>Next project</em><span>${n[1]} →</span><div>${art(n)}</div></a>`}
 
 const AV='<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#e5a53a"/><circle cx="32" cy="25" r="11" fill="#2b2118"/><path d="M8 64c2-16 12-23 24-23s22 7 24 23z" fill="#2b2118"/></svg>';
+function avatar(){const L=(st.about_images&&st.about_images.length?st.about_images:(st.about_image?[st.about_image]:[])).slice(0,10),n=L.length;
+ if(!n)return `<div class="abav">${AV}</div>`;
+ const im=(a,k)=>`<picture>${a.webp?`<source srcset="${esc(a.webp)}" type="image/webp">`:''}<img${n>1&&!k?' class="on"':''} src="${esc(a.url)}" alt="${esc(a.alt||st['about.name'])}" decoding="async"${n>1?' loading="eager"':''}></picture>`;
+ return `<div class="abav${n>1?' rot" tabindex="0" role="button" aria-label="Show next picture':''}">${L.map(im).join('')}</div>`}
+// Profile pictures: auto-rotate every 10 s (cross-fade, fixed box so nothing shifts). Mouse hover = switch to the next picture and hold while
+// hovering, rotation resumes on leave. Touch / keyboard (no hover): tap or Enter = next picture, timer restarts. One picture = no rotation.
+function initAvatar(box){const imgs=box&&[...box.querySelectorAll('img')];if(!imgs||imgs.length<2)return;let i=0,t=0;
+ const next=()=>{const p=imgs[i];p.classList.add('prev');p.classList.remove('on');i=(i+1)%imgs.length;imgs[i].classList.remove('prev');imgs[i].classList.add('on');setTimeout(()=>p.classList.remove('prev'),1000)},stop=()=>{clearInterval(t);t=0},
+ start=()=>{stop();t=setInterval(()=>{if(!document.body.contains(box))return stop();if(!document.hidden)next()},10000)};
+ box.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'){next();stop()}});box.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')start()});
+ box.addEventListener('click',e=>{if(!matchMedia('(hover:hover) and (pointer:fine)').matches){next();start()}});
+ box.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();next();start()}});start()}
 function about(){return `<div class="dbar"><a href="/">← Back to portfolio</a><button id="abth" aria-label="Toggle light and dark mode">${isDark()?'☾':'☀'}</button></div>
-<div class="abp"><div class="abtop"><div class="abav">${st.about_image?`<img src="${esc(st.about_image.url)}" alt="${esc(st.about_image.alt||st['about.name'])}">`:AV}</div><div><h1>${esc(st['about.name'])}</h1><span>${esc(st['about.role'])}</span></div></div>
+<div class="abp"><div class="abtop">${avatar()}<div><h1>${esc(st['about.name'])}</h1><span>${esc(st['about.role'])}</span></div></div>
 ${st['about.html']||''}${document.querySelector('.soc').outerHTML}</div>`}
 history.scrollRestoration='manual';
-let saved=0;const D=$('#detail'),OV=()=>D.classList.contains('on'),LP={'/about':1,'/playground':1},norm=p=>(p.replace(/\/+$/,'')||'/');
+let saved=0;const D=$('#detail');D.addEventListener('loadedmetadata',e=>{const v=e.target;if(v.classList&&v.classList.contains('gv')&&v.videoWidth){v.style.aspectRatio=v.videoWidth+'/'+v.videoHeight;v.style.maxWidth=v.videoWidth+'px'}},true);   // gallery video: real aspect ratio / natural size
+const OV=()=>D.classList.contains('on'),LP={'/about':1,'/playground':1},norm=p=>(p.replace(/\/+$/,'')||'/');
 const SITE=st['site.name']||'Portfolio',WHO=st['about.name']||st['site.owner']||SITE,TT={'/':SITE+(st['about.role']?' — '+st['about.role']:''),'/about':'About — '+WHO,'/playground':'Playground — '+SITE};
 function openOverlay(html){if(!OV())saved=scrollY;D.innerHTML=html;D.scrollTop=0;D.classList.add('on');D.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';applyLock()}
 function closeOverlay(){if(!OV())return;D.classList.remove('on');D.setAttribute('aria-hidden','true');document.body.style.overflow='';scrollTo(0,saved);applyLock()}
 function render(){
  if(location.hash==='#/about'||location.hash==='#/playground')history.replaceState({},'',location.hash.slice(1));   // old hash links still work
  const path=norm(location.pathname),m=location.hash.match(/^#\/p\/(.+)$/);
- if(path==='/about'){openOverlay(about());const tb=D.querySelector('#abth');tb.onclick=()=>{initAudio();sfx.click();setTheme();tb.textContent=isDark()?'☾':'☀'};document.title=TT['/about']}
+ if(path==='/about'){openOverlay(about());initAvatar(D.querySelector('.abav.rot'));const tb=D.querySelector('#abth');tb.onclick=()=>{initAudio();sfx.click();setTheme();tb.textContent=isDark()?'☾':'☀'};document.title=TT['/about']}
  else if(path==='/playground'){openOverlay('<div class="dbar"><a href="/">← Back</a><span></span></div><h1 class="dt">Playground</h1>');document.title=TT['/playground']}
  else if(m){const i=P.findIndex(x=>x[0]===m[1]);if(i<0)return;openOverlay(detail(i));document.title=TT['/']}
  else{closeOverlay();document.title=TT['/']}}

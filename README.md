@@ -122,3 +122,9 @@ rate-limited; admin HTML fields are sanitised server-side (allow-list); uploads 
 - **WebP:** `sharp` is an optional dependency. JPEG/PNG uploads get a `<name>.webp` beside the original (kept only if ≥15% smaller; skipped over 30 MB / 50 MP). `IMAGE_OPTIMIZE=0` disables it; `npm run media:optimize` handles existing files. If `sharp` cannot install, the site works unchanged.
 - **Video:** never transcoded. Admin → Media warns when an MP4 is not fast-start; fix with `ffmpeg -i in.mp4 -c copy -movflags +faststart out.mp4`.
 - **Tests:** `npm test` (SVG sanitiser), `npm run check`.
+
+## Gallery, profile pictures, SVG sharpness
+
+- **Gallery:** items are never put in fixed boxes. Images use their real pixel size (read from the file header, no DB change) and only shrink when the column is narrower; videos fill the column at their real aspect ratio. Admin → project → "Add media" accepts several files at once (or several library items).
+- **Profile pictures:** Admin → About → up to 10 pictures (order matters). With 2+ they cross-fade about every 10 s on the About page; mouse hover shows the next one and pauses until the pointer leaves; on touch a tap shows the next one. Stored as `about.image_media_ids` (the old `about.image_media_id` is kept as the first picture).
+- **SVG:** a viewBox-only SVG now gets explicit width/height on upload. Run `npm run media:sanitize-svg -- --write` once to apply that to SVGs uploaded earlier. The admin warns when an SVG embeds bitmaps (not true vector).

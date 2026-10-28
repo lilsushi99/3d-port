@@ -2,7 +2,7 @@
 // UPLOAD_DIR MUST be a directory that survives deployments (see README "Persistent media").
 require('dotenv').config();
 const multer = require('multer'), path = require('path'), fs = require('fs'), crypto = require('crypto');
-const { sanitizeSvg } = require('./svg'), { webpName } = require('./optimize');
+const { sanitizeSvg, embeddedBitmaps, BITMAP_WARNING } = require('./svg'), { webpName } = require('./optimize');
 const APP_DIR = path.resolve(__dirname, '..'), LEGACY_DIR = path.join(APP_DIR, 'uploads');
 const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || LEGACY_DIR);
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -47,7 +47,7 @@ function validate(file) {
   if (svg) {   // sanitise, then REWRITE the file on disk with the cleaned markup (never rasterised; rendered with <img>)
     try {
       const clean = sanitizeSvg(fs.readFileSync(file.path)); fs.writeFileSync(file.path + '.tmp', clean); fs.renameSync(file.path + '.tmp', file.path);
-      file.size = Buffer.byteLength(clean); return null;
+      file.size = Buffer.byteLength(clean); const nb = embeddedBitmaps(clean); if (nb) file.warn = BITMAP_WARNING(nb); return null;
     } catch (e) { try { fs.unlinkSync(file.path + '.tmp'); } catch {} return { status: 400, message: 'This SVG was rejected: ' + (e.status ? e.message : 'it could not be parsed') }; }
   }
   if (!sniff(file)) return { status: 400, message: 'File content does not match its type' };

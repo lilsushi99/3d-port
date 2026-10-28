@@ -1,13 +1,14 @@
 // Public, read-only content API. Database -> this API -> the website. Nothing here writes.
-const router = require('express').Router(), db = require('../db'), { exists } = require('../upload'), { webpName } = require('../optimize');
+const path = require('path'), router = require('express').Router(), db = require('../db'), { exists, UPLOAD_DIR } = require('../upload'), { webpName } = require('../optimize'), { imageSize } = require('../dims');
 const wrap = fn => (q, r, n) => fn(q, r).catch(n);
 const group = (rows, key) => rows.reduce((m, r) => ((m[r[key]] ||= []).push(r), m), {});
 
 async function build() {
-  const [media] = await db.query('SELECT id,path,kind,alt FROM media');
+  const [media] = await db.query('SELECT id,path,kind,alt,mime FROM media');
   // Media whose file is gone from disk is treated as "not set", so the site falls back gracefully instead of 404-ing.
+  const dimsOf = m => { const d = m.kind === 'image' && imageSize(path.join(UPLOAD_DIR, m.path), m.mime); return d ? { w: d.w, h: d.h, svg: m.mime === 'image/svg+xml' } : {}; };   // real pixel size from the file header
   const webpOf = m => { const w = m.kind === 'image' && webpName(m.path); return w && exists(w) ? '/uploads/' + w : null; };   // optional optimised derivative
-  const mm = new Map(media.filter(m => exists(m.path)).map(m => [m.id, { id: m.id, url: '/uploads/' + m.path, webp: webpOf(m), kind: m.kind, alt: m.alt || '' }]));
+  const mm = new Map(media.filter(m => exists(m.path)).map(m => [m.id, { id: m.id, url: '/uploads/' + m.path, webp: webpOf(m), kind: m.kind, alt: m.alt || '', ...dimsOf(m) }]));
   const U = id => (id && mm.get(+id)) || null;
   const [sr] = await db.query('SELECT `key`,`value` FROM settings');
   const settings = Object.fromEntries(sr.filter(r => !r.key.startsWith('system.')).map(r => [r.key, r.value]));
@@ -27,7 +28,9 @@ async function build() {
     metrics: (M[p.id] || []).map(m => ({ value: m.value, label: m.label }))
   }));
   const [countries] = await db.query('SELECT iso_numeric iso,name,capital,client,note,marker_lat lat,marker_lng lng FROM countries WHERE is_active=1 ORDER BY sort_order,id');
-  settings.about_image = U(settings['about.image_media_id']);
+  const pics = String(settings['about.image_media_ids'] || '').split(',').filter(Boolean).map(U).filter(Boolean);   // up to 10 profile pictures, in order
+  settings.about_images = pics.length ? pics : [U(settings['about.image_media_id'])].filter(Boolean);
+  settings.about_image = settings.about_images[0] || null;
   settings.screen_video = U(settings['hero.screen_video_media_id']);
   settings.nav_image = U(settings['hero.nav_image_media_id']);
   settings.favicon = U(settings['site.favicon_media_id']);

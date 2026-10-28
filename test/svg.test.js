@@ -1,5 +1,5 @@
 const test = require('node:test'), assert = require('node:assert/strict');
-const { sanitizeSvg, SvgError } = require('../server/svg');
+const { sanitizeSvg, SvgError, embeddedBitmaps } = require('../server/svg');
 let sharp = null; try { sharp = require('sharp'); } catch {}
 
 const RICH = `<?xml version="1.0" encoding="UTF-8"?>
@@ -85,3 +85,16 @@ test('rejected outright: entity declarations (XXE / billion laughs), non-SVG roo
   assert.throws(() => sanitizeSvg('not xml at all'), SvgError);
 });
 test('output is idempotent (sanitising twice changes nothing)', () => { const o = sanitizeSvg(RICH); assert.equal(sanitizeSvg(o), o); });
+
+test('viewBox-only SVG gets explicit width/height from the viewBox (no 300x150 default sizing); drawing is untouched', () => {
+  const o = sanitizeSvg('<svg viewBox="0 0 400 300"><rect width="400" height="300" fill="red"/></svg>');
+  assert.match(o, /width="400"/); assert.match(o, /height="300"/); assert.match(o, /viewBox="0 0 400 300"/);
+  assert.match(sanitizeSvg('<svg viewBox="0 0 24 24" width="48"/>'), /width="48"/);    // an explicit width is respected
+  assert.ok(!/ height=/.test(sanitizeSvg('<svg viewBox="0 0 24 24" width="48"/>')));
+});
+test('embedded bitmaps survive byte-for-byte and are detected (so the admin can warn that they are not vector)', () => {
+  const b64 = Buffer.from('not really a png but opaque base64 payload'.repeat(20)).toString('base64');
+  const o = sanitizeSvg(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><image href="data:image/png;base64,${b64}" width="10" height="10"/></svg>`);
+  assert.ok(o.includes(b64), 'base64 payload must be unchanged'); assert.equal(embeddedBitmaps(o), 1);
+  assert.equal(embeddedBitmaps(sanitizeSvg('<svg viewBox="0 0 1 1"><rect/></svg>')), 0);
+});

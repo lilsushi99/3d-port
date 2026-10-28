@@ -90,6 +90,13 @@ const BOOLS = new Set(['hero.mobile_scroll', 'preloader.enabled', 'footprint.sho
 const MEDIA_KEYS = new Set(['site.favicon_media_id', 'hero.nav_image_media_id', 'about.image_media_id', 'hero.screen_video_media_id']);
 async function normalize(k, v) {
   if (k.endsWith('_html')) return clean(v);
+  if (k === 'about.image_media_ids') {   // up to 10 profile pictures: comma-separated media ids, in display order
+    const ids = [...new Set(String(v ?? '').split(',').map(x => x.trim()).filter(Boolean))];
+    if (ids.some(x => !/^\d+$/.test(x))) throw bad('Profile pictures must be media ids');
+    if (ids.length > 10) throw bad('You can have at most 10 profile pictures');
+    if (ids.length) { const [rows] = await db.query('SELECT id,kind FROM media WHERE id IN (?)', [ids.map(Number)]); if (rows.length !== ids.length || rows.some(r => r.kind !== 'image')) throw bad('Profile pictures must be existing images'); }
+    return ids.join(',');
+  }
   if (BOOLS.has(k)) return (v === 1 || v === '1' || v === true || v === 'true' || v === 'on') ? '1' : '0';
   if (k === 'preloader.duration') { const n = parseInt(v, 10); return String(Number.isFinite(n) ? Math.min(3500, Math.max(800, n)) : 2000); }   // 0.8s .. 3.5s
   if (k === 'preloader.text') return String(v ?? '').replace(/<[^>]*>/g, '').trim().slice(0, 40);
@@ -106,6 +113,7 @@ router.get('/settings', wrap(async (_q, r) => r.json(Object.fromEntries((await d
 router.put('/settings', wrap(async (q, r) => {
   const rows = [];
   for (const [k, v] of Object.entries(q.body || {})) { if (!KEY.test(k)) throw bad('Unknown setting ' + k); rows.push([k, await normalize(k, v)]); }   // validate everything before writing anything
+  const pics = rows.find(r => r[0] === 'about.image_media_ids'); if (pics) rows.push(['about.image_media_id', pics[1].split(',')[0] || '']);   // keep the legacy single-picture key in step
   for (const [k, v] of rows) await db.query('INSERT INTO settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)', [k, v]);
   r.json({ ok: true });
 }));
@@ -123,7 +131,7 @@ const mediaInfo = m => {   // extra, read-only facts for the admin UI (no schema
 const afterUpload = (file) => {   // runs AFTER the response is sent: never blocks the upload
   optimize.enqueue(UPLOAD_DIR, file.filename, () => require('./public').invalidate());
 };
-const uploadWarning = file => (file.mimetype === 'video/mp4' && mp4Layout(file.path).faststart === false ? FASTSTART_TIP : undefined);
+const uploadWarning = file => file.warn || (file.mimetype === 'video/mp4' && mp4Layout(file.path).faststart === false ? FASTSTART_TIP : undefined);
 router.get('/media', wrap(async (_q, r) => r.json((await db.query('SELECT * FROM media ORDER BY id DESC'))[0].map(m => ({ ...m, ...mediaInfo(m) })))));
 router.post('/media', uploadOne, wrap(async (q, r) => {
   if (!q.file) throw bad('No file');
@@ -150,6 +158,8 @@ router.delete('/media/:id', wrap(async (q, r) => {
   const id = +q.params.id, [[m]] = await db.query('SELECT path FROM media WHERE id=?', [id]);
   if (m) {
     for (const k of MEDIA_KEYS) await db.query('UPDATE settings SET `value`=\'\' WHERE `key`=? AND `value`=?', [k, String(id)]);   // no dangling references
+    const [[pr]] = await db.query("SELECT `value` v FROM settings WHERE `key`='about.image_media_ids'");
+    if (pr && pr.v) await db.query("UPDATE settings SET `value`=? WHERE `key`='about.image_media_ids'", [pr.v.split(',').filter(x => x && x !== String(id)).join(',')]);
     await db.query('DELETE FROM media WHERE id=?', [id]); unlinkQuiet(m.path);
   }
   r.json({ ok: true });

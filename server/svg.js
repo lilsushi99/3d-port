@@ -75,6 +75,9 @@ function sanitizeSvg(input) {
           {
             a.xmlns = 'http://www.w3.org/2000/svg';
             if (!a.viewBox) { const w = num(a.width), h = num(a.height); if (w > 0 && h > 0) a.viewBox = `0 0 ${w} ${h}`; }
+            // A viewBox with no width/height has no intrinsic size; some browsers (notably iOS Safari) then size/raster the <img> from a
+            // 300x150 default and look soft. Give it explicit dimensions equal to the viewBox: purely metadata, the drawing is unchanged.
+            if (a.viewBox && !(a.width || a.height)) { const v = a.viewBox.trim().split(/[\s,]+/).map(Number); if (v.length === 4 && v[2] > 0 && v[3] > 0) { a.width = String(v[2]); a.height = String(v[3]); } }
           }
         }
         return { tagName, attribs: a };
@@ -89,4 +92,7 @@ function sanitizeSvg(input) {
   if (/xlink:/.test(out) && !/xmlns:xlink=/.test(res)) return out.replace(/^<svg\b/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
   return out;
 }
-module.exports = { sanitizeSvg, cleanCss, SvgError };
+// Embedded bitmaps (<image href="data:image/png...">) are not vector: they cannot get sharper than their own pixels.
+const embeddedBitmaps = svg => (String(svg).match(/<image\b[^>]*\bhref="data:image\//gi) || []).length;
+const BITMAP_WARNING = n => `This SVG embeds ${n} bitmap image${n > 1 ? 's' : ''} (PNG/JPEG data inside the file). Those parts are not true vector, so they can look soft on high-density phone screens or when zoomed. For crisp results, re-export it with shapes and text as paths and without embedded pictures.`;
+module.exports = { sanitizeSvg, cleanCss, SvgError, embeddedBitmaps, BITMAP_WARNING };
