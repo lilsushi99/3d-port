@@ -96,6 +96,18 @@ function bindForm(root) {
     if (c === 'createLink') { const sel = getSelection(), saved = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null, u = prompt('Link URL (https://…)'); ed.focus(); if (saved) { sel.removeAllRanges(); sel.addRange(saved); } if (u) document.execCommand(c, false, u); }
     else document.execCommand(c);
   });
+  $$('[data-pics]', root).forEach(el => {
+    drawPics(el);
+    el.onclick = guard(async e => {
+      const a = e.target.dataset.a; if (!a) return;
+      const ids = (el.dataset.ids || '').split(',').filter(Boolean), f = e.target.closest('figure'), i = f ? ids.indexOf(f.dataset.id) : -1;
+      if (a === 'px' && i >= 0) ids.splice(i, 1);
+      if (a === 'pl' && i > 0) [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]];
+      if (a === 'pr' && i >= 0 && i < ids.length - 1) [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]];
+      if (a === 'padd') { const xs = await pickMedia('image', { multi: true, max: PICS_MAX - ids.length }); if (!xs) return; for (const x of xs) if (!ids.includes(String(x.id)) && ids.length < PICS_MAX) ids.push(String(x.id)); }
+      el.dataset.ids = ids.join(','); drawPics(el);
+    });
+  });
   $$('[data-pick]', root).forEach(p => p.onclick = guard(async e => {
     const a = e.target.dataset.a; if (!a) return;
     if (a === 'clear') p.dataset.id = ''; else { const m = await pickMedia(p.dataset.kind); if (!m) return; p.dataset.id = m.id; }
@@ -103,22 +115,45 @@ function bindForm(root) {
     p.insertAdjacentHTML('afterbegin', m ? (m.kind === 'video' ? `<video src="${m.url}" muted></video>` : `<img src="${m.url}" alt="">`) : '<span class="tag">none</span>');
   }));
 }
-const collect = root => { const o = {}; $$('[data-s]', root).forEach(i => o[i.dataset.s] = i.type === 'checkbox' ? (i.checked ? 1 : 0) : i.value); $$('[data-rte]', root).forEach(i => o[i.dataset.rte] = i.innerHTML); $$('[data-pick]', root).forEach(i => o[i.dataset.pick] = i.dataset.id); return o; };
+const collect = root => { const o = {}; $$('[data-s]', root).forEach(i => o[i.dataset.s] = i.type === 'checkbox' ? (i.checked ? 1 : 0) : i.value); $$('[data-rte]', root).forEach(i => o[i.dataset.rte] = i.innerHTML); $$('[data-pick]', root).forEach(i => o[i.dataset.pick] = i.dataset.id); $$('[data-pics]', root).forEach(i => o[i.dataset.pics] = i.dataset.ids); return o; };
 const saveSettings = guard(async root => { await api('PUT', '/settings', collect(root)); toast('Saved'); });
 
-async function pickMedia(kind) {
+async function pickMedia(kind, opt = {}) {
+  // Single mode (default): click one item, get it back. Multi mode ({multi:true,max}): click to select several (or upload several at once), then "Add".
+  const multi = !!opt.multi, max = opt.max || 99, sel = [];
   MEDIA = await api('GET', '/media');
   return new Promise(res => {
     const m = document.createElement('div'); m.className = 'modal';
-    const draw = () => m.innerHTML = `<div><div class="top"><h2>Choose media</h2><span><input type="file" id="up" accept="image/*,video/mp4,video/webm" style="display:none"><button class="btn" id="upb">Upload new</button> <button class="btn" id="cx">Cancel</button></span></div><div class="grid">${MEDIA.filter(x => !x.missing && (kind === 'any' || x.kind === kind)).map(x => `<figure data-id="${x.id}">${x.kind === 'video' ? `<video src="${x.url}" muted></video>` : `<img src="${x.url}" alt="">`}<figcaption>${esc(x.original_name)}</figcaption></figure>`).join('') || '<p>No media yet. Upload some.</p>'}</div></div>`;
+    const lab = () => `Add ${sel.length ? sel.length + ' ' : ''}selected`;
+    const draw = () => m.innerHTML = `<div><div class="top"><h2>${multi ? 'Choose media — select several' : 'Choose media'}</h2><span><input type="file" id="up" multiple accept="image/*,video/mp4,video/webm" style="display:none"><button class="btn" id="upb">Upload new (several allowed)</button> ${multi ? `<button class="btn pri" id="addsel"${sel.length ? '' : ' disabled'}>${lab()}</button> ` : ''}<button class="btn" id="cx">Cancel</button></span></div>${multi ? `<p class="limit">Click items to select them (up to ${max}), or upload several files at once; uploads are selected automatically.</p>` : ''}<div class="grid">${MEDIA.filter(x => !x.missing && (kind === 'any' || x.kind === kind)).map(x => `<figure data-id="${x.id}"${sel.includes(String(x.id)) ? ' class="sel"' : ''}>${x.kind === 'video' ? `<video src="${x.url}" muted></video>` : `<img src="${x.url}" alt="">`}<figcaption>${esc(x.original_name)}</figcaption></figure>`).join('') || '<p>No media yet. Upload some.</p>'}</div></div>`;
     draw(); document.body.append(m);
+    const done = v => { m.remove(); res(v); };
     m.onclick = guard(async e => {
-      if (e.target === m || e.target.id === 'cx') { m.remove(); res(null); }
-      const f = e.target.closest('figure'); if (f) { m.remove(); res(mget(f.dataset.id)); }
-      if (e.target.id === 'upb') $('#up', m).click();
+      if (e.target === m || e.target.id === 'cx') return done(null);
+      if (e.target.id === 'upb') return $('#up', m).click();
+      if (e.target.id === 'addsel') return done(sel.map(mget).filter(Boolean));
+      const f = e.target.closest('figure'); if (!f) return;
+      if (!multi) return done(mget(f.dataset.id));
+      const id = f.dataset.id, k = sel.indexOf(id);
+      if (k >= 0) sel.splice(k, 1); else if (sel.length >= max) return toast(`You can select at most ${max} here`, true); else sel.push(id);
+      f.classList.toggle('sel', k < 0); const b = $('#addsel', m); b.disabled = !sel.length; b.textContent = lab();
     });
-    m.addEventListener('change', guard(async e => { if (e.target.id !== 'up') return; const r = await uploadFiles(e.target.files, () => '/media'); e.target.value = ''; if (!r.length) return; MEDIA = await api('GET', '/media'); draw(); }));
+    m.addEventListener('change', guard(async e => {
+      if (e.target.id !== 'up') return;
+      const r = await uploadFiles(e.target.files, () => '/media'); e.target.value = ''; if (!r.length) return;
+      MEDIA = await api('GET', '/media');
+      if (multi) for (const x of r) { if (sel.length >= max) { toast(`Only the first ${max} were selected`, true); break; } sel.push(String(x.id)); }
+      draw();
+    }));
   });
+}
+
+// ---------- profile pictures (up to 10, in display order) ----------
+const PICS_MAX = 10;
+const PICS = (l, k, ids) => `<div class="fld"><span class="lbl">${l}</span><div class="pics" data-pics="${k}" data-ids="${esc(ids || '')}"></div></div>`;
+function drawPics(el) {
+  const ids = (el.dataset.ids || '').split(',').filter(id => id && mget(id)); el.dataset.ids = ids.join(',');
+  el.innerHTML = `<div class="grid">${ids.map((id, i) => `<figure data-id="${id}" style="cursor:default"><img src="${mget(id).url}" alt=""><figcaption><button type="button" class="btn sm" data-a="pl" aria-label="Move earlier"${i ? '' : ' disabled'}>←</button><button type="button" class="btn sm" data-a="pr" aria-label="Move later"${i < ids.length - 1 ? '' : ' disabled'}>→</button><button type="button" class="btn sm dng" data-a="px">Remove</button></figcaption></figure>`).join('') || '<p class="limit">No pictures yet: the default avatar is shown.</p>'}</div><p class="limit">${ids.length}/${PICS_MAX} pictures. With two or more they rotate about every 10 seconds on the About page (hover on desktop, tap on touch, switches to the next one).</p><button type="button" class="btn sm" data-a="padd"${ids.length >= PICS_MAX ? ' disabled' : ''}>Add pictures (select or upload several)</button>`;
 }
 
 // ---------- generic inline list editor (rows, not tables, for every new item) ----------
@@ -159,7 +194,7 @@ const VIEWS = {
   },
   async about(root) {
     const s = await api('GET', '/settings');
-    mount(root, card('About page', 'Used by the Read About Me page. Independent of the homepage bio.', `<div class="row c2">${F('Name', 'about.name', s['about.name'])}${F('Role line', 'about.role', s['about.role'])}</div><div class="row">${PICK('Picture', 'about.image_media_id', s['about.image_media_id'])}</div>${RTE('About text', 'about.html', s['about.html'])}<p></p>${saveBtn}`), () => onSave(root));
+    mount(root, card('About page', 'Used by the Read About Me page. Independent of the homepage bio.', `<div class="row c2">${F('Name', 'about.name', s['about.name'])}${F('Role line', 'about.role', s['about.role'])}</div><div class="row">${PICS('Profile pictures', 'about.image_media_ids', s['about.image_media_ids'] || s['about.image_media_id'])}</div>${RTE('About text', 'about.html', s['about.html'])}<p></p>${saveBtn}`), () => onSave(root));
   },
   async work(root) {
     const [s, cats, prj] = await Promise.all([api('GET', '/settings'), api('GET', '/categories'), api('GET', '/projects')]);
@@ -223,13 +258,13 @@ function projectForm(p, cats) {
   <div class="row c2">${PICK('Cover image', 'cover_media_id', p.cover_media_id)}${PICK('Project video', 'video_media_id', p.video_media_id, 'video')}</div>
   <div class="row c4">${F('Fallback colour A', 'accent_a', p.accent_a, 'text', 'placeholder="#1fb58f"')}${F('Fallback colour B', 'accent_b', p.accent_b, 'text', 'placeholder="#0b6e57"')}<label>Featured<input type="checkbox" data-s="is_featured" ${p.is_featured ? 'checked' : ''}></label><label>Published<input type="checkbox" data-s="is_published" ${p.is_published ? 'checked' : ''}></label></div></div>
   <div class="card"><h2>Metrics</h2><div id="mt">${(p.metrics || []).map(x => `<div class="row c3" data-m><input placeholder="Value" value="${esc(x.value)}"><input placeholder="Label" value="${esc(x.label)}"><button class="btn sm dng" data-a="rm">Remove</button></div>`).join('')}</div><button class="btn sm" data-a="addm">Add metric</button></div>
-  <div class="card"><h2>Gallery</h2><div class="grid" id="gl">${(p.gallery || []).map(g => gItem(g.media_id, g.caption)).join('')}</div><p></p><button class="btn sm" data-a="addg">Add media</button></div>
+  <div class="card"><h2>Gallery</h2><div class="grid" id="gl">${(p.gallery || []).map(g => gItem(g.media_id, g.caption)).join('')}</div><p></p><button class="btn sm" data-a="addg">Add media (select or upload several)</button></div>
   <button class="btn pri" data-a="save">Save project</button>`);
   m.addEventListener('click', guard(async e => {
     const a = e.target.dataset.a;
     if (a === 'rm') e.target.closest('[data-m]').remove();
     if (a === 'addm') $('#mt', m).insertAdjacentHTML('beforeend', `<div class="row c3" data-m><input placeholder="Value"><input placeholder="Label"><button class="btn sm dng" data-a="rm">Remove</button></div>`);
-    if (a === 'addg') { const x = await pickMedia('any'); if (x) $('#gl', m).insertAdjacentHTML('beforeend', gItem(x.id, '')); }
+    if (a === 'addg') { const xs = await pickMedia('any', { multi: true }); for (const x of xs || []) $('#gl', m).insertAdjacentHTML('beforeend', gItem(x.id, '')); }
     if (a === 'rmg') e.target.closest('figure').remove();
     if (a === 'save') {
       const o = collect(m); if (!String(o.title).trim()) return toast('Project title is required', true);

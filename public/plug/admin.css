@@ -37,3 +37,6 @@ td input,td select{padding:7px 9px}.acts{display:flex;gap:6px;white-space:nowrap
 .upl b{font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.upl small{color:var(--mut);font-size:12px}
 .upl .bar{height:8px;border-radius:99px;background:var(--bd);overflow:hidden}.upl .bar i{display:block;height:100%;width:0;background:var(--ac);transition:width .15s}
 p.limit{font-size:12.5px;color:var(--mut);margin:0 0 12px;line-height:1.5}code{font-family:ui-monospace,monospace;font-size:12px;background:var(--bd);padding:1px 5px;border-radius:5px}
+
+.grid figure.sel{outline:3px solid var(--ac);outline-offset:-3px;position:relative}.grid figure.sel::after{content:"✓";position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:var(--ac);color:#fff;font-size:13px;line-height:22px;text-align:center}
+.pics .grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}.pics figcaption{display:flex;gap:4px;flex-wrap:wrap}
